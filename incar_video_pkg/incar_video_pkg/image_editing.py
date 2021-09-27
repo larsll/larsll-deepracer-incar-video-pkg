@@ -5,6 +5,8 @@ import datetime
 import logging
 import cv2
 
+from rclpy.time import Time
+
 from sensor_msgs.msg import Imu
 
 from incar_video_pkg.logger import Logger
@@ -30,6 +32,7 @@ class ImageEditing(ImageEditingInterface):
         self.race_type = race_type
         self.racecar_name = racecar_name
         self.racecar_index = 0
+        self.start_time = 0
 
         # Store the font which we will use to write the phase with
         self.amazon_ember_regular_20px = utils.get_font('Amazon_Ember_Rg', 20)
@@ -79,8 +82,10 @@ class ImageEditing(ImageEditingInterface):
         # Lap Counter
         loc_y += 30
         # total_evaluation_time (Race time)
-        # total_eval_milli_seconds = mp4_video_metrics_info[self.racecar_index].total_evaluation_time
-        total_eval_milli_seconds = 0
+        if self.start_time == 0:
+            self.start_time = Time.from_msg(imu_info.header.stamp).nanoseconds / 1e6
+        
+        total_eval_milli_seconds = Time.from_msg(imu_info.header.stamp).nanoseconds / 1e6 - self.start_time
         time_delta = datetime.timedelta(milliseconds=total_eval_milli_seconds)
         total_eval_time_text = "Time | {}".format(utils.milliseconds_to_timeformat(time_delta))
         major_cv_image = utils.write_text_on_image(image=major_cv_image, text=total_eval_time_text,

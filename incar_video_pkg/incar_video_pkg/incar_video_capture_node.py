@@ -20,6 +20,7 @@ from sensor_msgs.msg import Imu
 from incar_video_pkg.logger import Logger
 from incar_video_pkg.utils import DoubleBuffer
 from incar_video_pkg import constants
+from incar_video_pkg.constants import (Mp4Parameter)
 
 from deepracer_interfaces_pkg.srv import VideoStateSrv
 from deepracer_interfaces_pkg.msg import EvoSensorMsg, CameraMsg
@@ -36,16 +37,14 @@ class InCarVideoCaptureNode(Node):
 
     def __init__(self):
         super().__init__('incar_video_capture_node')
-
-        self.stop_queue = Event()
-        
+       
         # Fetching main camera frames, start consumer thread and producer thread for main camera frame
         self.main_camera_topic = constants.MAIN_CAMERA_TOPIC
         self.imu_topic = constants.IMU_TOPIC
-
+        self.last_publish = self.get_clock().now()
         self.qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
             depth=1
         )
 
@@ -54,7 +53,7 @@ class InCarVideoCaptureNode(Node):
         self.stream_cbg = ReentrantCallbackGroup()
         self.stream_pub = self.create_publisher(EvoSensorMsg,
                                   constants.PUBLISH_SENSOR_TOPIC,
-                                  1)
+                                  50)
 
     def __enter__(self):
 
@@ -68,25 +67,24 @@ class InCarVideoCaptureNode(Node):
         req.activate_video = 1
         _ = self.cli.call_async(req)
 
-        self.camera_sub_cbg = MutuallyExclusiveCallbackGroup()
+        self._camera_data_buffer = DoubleBuffer(clear_data_on_get=False)
+        self.camera_sub_cbg = ReentrantCallbackGroup()
         self.camera_sub = self.create_subscription(CameraMsg,
                                  self.main_camera_topic,
                                  self._producer_frame_thread,
-                                 self.qos_profile,
-                                 callback_group=self.camera_sub_cbg,
-                                 )
+                                 10,
+                                 callback_group=self.camera_sub_cbg)
 
         self._imu_data_buffer = DoubleBuffer(clear_data_on_get=False)
         self.imu_sub_cbg = ReentrantCallbackGroup()
         self.imu_sub = self.create_subscription(Imu,
                                  self.imu_topic,
                                  self._update_imu_data,
-                                 self.qos_profile,
+                                 1,
                                  callback_group=self.imu_sub_cbg)
 
 
-        self.thread = Thread(target=self._processor_thread)
-        self.thread.start()
+        self.timer = self.create_timer(1/Mp4Parameter.FPS.value,self._timer_processor)
 
         return self
 
@@ -94,8 +92,6 @@ class InCarVideoCaptureNode(Node):
         """Called when the object is destroyed.
         """
         self.get_logger().info('Exiting.')
-        self.stop_queue.set()
-        self.rate.destroy()
 
     def _update_imu_data(self, imu_data):
         """ Used to update the racers metric information
@@ -115,24 +111,26 @@ class InCarVideoCaptureNode(Node):
             sensor_data.images = frame.images
             sensor_data.imu_data = self._imu_data_buffer.get(block=False)
 
-            self.stream_pub.publish(sensor_data)
-            LOG.debug(f"Publishing frame: { Time.from_msg(sensor_data.images[0].header.stamp).nanoseconds / 1e9 }")
+            self._camera_data_buffer.put(sensor_data)
+
+            LOG.debug(f"Frame to buffer: { Time.from_msg(sensor_data.images[0].header.stamp).nanoseconds / 1e9 }")
             
         except DoubleBuffer.Empty:
             LOG.warn('No Camera Message and/or IMU Message available.')
             pass
 
+    def _timer_processor(self):
+        try:
+            sensor_data = self._camera_data_buffer.get(block=True)
+            self.stream_pub.publish(sensor_data)
+            current_publish = Time.from_msg(sensor_data.images[0].header.stamp)
+            LOG.debug(f"Publishing frame: { current_publish.nanoseconds / 1e9 }")
+            if current_publish == self.last_publish:
+                LOG.warn(f"Publishing duplicate frame: { current_publish.nanoseconds / 1e9 }")
+            self.last_publish = current_publish
 
-    def _processor_thread(self):
-        self.rate = self.create_rate(1)
-
-        while not self.stop_queue.is_set():
-            try:
-                while rclpy.ok():
-                    self.rate.sleep()
-            except Exception as ex:
-                self.get_logger().error(f"Error: {ex}") 
-
+        except:
+            LOG.error('Error in timer process.')
 
 def main(args=None):
     rclpy.init(args=args)

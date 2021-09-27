@@ -250,7 +250,7 @@ class FrameQueueData(Enum):
 
 
 # Agent Video editor constants
-MAX_FRAMES_IN_QUEUE = 1500
+MAX_FRAMES_IN_QUEUE = 2700
 KVS_PUBLISH_PERIOD = 1.0/15.0
 QUEUE_WAIT_TIME = 10 # In seconds
 

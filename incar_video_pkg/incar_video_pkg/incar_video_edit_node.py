@@ -12,6 +12,7 @@ from threading import Thread
 import queue
 import cv2
 import rclpy
+from rclpy.timer import Timer
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
@@ -85,7 +86,7 @@ class InCarVideoEditNode(Node):
         # All Mp4 related initialization
         self._mp4_queue.append(queue.Queue())
         self._mp4_queue_pushed = 0
-
+        self._edit_queue_pushed = 0
         # Initialize save mp4 ROS service for the markov package to signal when to
         # start and stop collecting video frames
         camera_info = utils.get_cameratype_params(self.racecar_name, self.racecar_name)
@@ -98,7 +99,7 @@ class InCarVideoEditNode(Node):
         self.camera_cbg = ReentrantCallbackGroup()
         self.camera_pub = self.create_publisher(ROSImg,
                                   PUBLISH_VIDEO_TOPIC,
-                                  10,
+                                  250,
                                   callback_group=self.camera_cbg)
 
     def __enter__(self):
@@ -107,23 +108,20 @@ class InCarVideoEditNode(Node):
         self.camera_sub = self.create_subscription(EvoSensorMsg,
                                  PUBLISH_SENSOR_TOPIC,
                                  self._producer_frame_callback,
-                                 1,
+                                 5,
                                  callback_group=self.camera_sub_cbg)
 
         self.subscribe_to_save_mp4()
         self.consumer_thread = Thread(target=self._consumer_mp4_frame_thread)
         self.consumer_thread.start()
 
-        self.throttle_thread = Thread(target=self._throttle_thread)
-        self.throttle_thread.start()
+        self.throttle_thread = self.create_timer(1.0/Mp4Parameter.FPS.value, self._throttle_thread)
 
         return self
 
     def __exit__(self, ExcType, ExcValue, Traceback):
         """Called when the object is destroyed.
         """
-        self.frame_rate.destroy()
-        self.unsubscribe_to_save_mp4()
         self.get_logger().info('Exiting.')
 
     def subscribe_to_save_mp4(self):
@@ -212,37 +210,30 @@ class InCarVideoEditNode(Node):
             frame (cv2.ImgMsg): Image/Sensor topic of the camera image frame
         """
         if rclpy.ok():
+            self._edit_queue_pushed += 1
+            LOG.debug("Pushed {} frames to Frame Buffer.".format(self._edit_queue_pushed ))
+
             self._main_camera_frame_buffer.put(frame)
 
 
     def _throttle_thread(self):
 
-        self.frame_rate = self.create_rate(Mp4Parameter.FPS.value)
-        mp4_queue_pushed = 0
+        try:
+            frame = self._main_camera_frame_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
 
-        while rclpy.ok():
-            try:
-                frame = self._main_camera_frame_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
+            if self._mp4_queue[self.racecar_index].qsize() == MAX_FRAMES_IN_QUEUE:
+                LOG.info("Dropping Mp4 frame from the queue")
+                self._mp4_queue[self.racecar_index].get()
+            
+            # Append to the MP4 queue
+            self._mp4_queue[self.racecar_index].put(frame)
+            self._mp4_queue_pushed += 1
 
-                if self._mp4_queue[self.racecar_index].qsize() == MAX_FRAMES_IN_QUEUE:
-                    LOG.info("Dropping Mp4 frame from the queue")
-                    self._mp4_queue[self.racecar_index].get()
-                
-                # Append to the MP4 queue
-                self._mp4_queue[self.racecar_index].put(frame)
-                mp4_queue_pushed += 1
+            LOG.debug("Pushed {} frames to Edit Queue.".format(self._mp4_queue_pushed))
 
-                LOG.info("Pushed {} frames to MP4 Queue.".format(mp4_queue_pushed))
-
-                if not self.frame_rate._is_destroyed: 
-                    self.frame_rate.sleep()
-                else:
-                    LOG.info("Stopped throttle thread.")
-                    return
-
-            except queue.Empty:
-                LOG.info("Input buffer is empty. Stopping")
-                return
+        except queue.Empty:
+            LOG.info("Input buffer is empty. Stopping")
+            return
 
     def _consumer_mp4_frame_thread(self):
         """ Consumes the frame produced by the _producer_frame_thread and edits the image
@@ -256,17 +247,20 @@ class InCarVideoEditNode(Node):
             try:
                 # Pop from the queue and edit the image
                 frame_data = self._mp4_queue[self.racecar_index].get(block=True, timeout=QUEUE_WAIT_TIME)
+
+                if frame_data:
+                    edited_frames = self._edit_camera_images(frame_data, is_mp4=True)
+
+                    self.camera_pub.publish(edited_frames[FrameTypes.MAIN_CAMERA_FRAME.value])
+                    mp4_queue_published += 1
+                    LOG.info("Published {} frame to MP4 queue. {} frames in queue.".format(mp4_queue_published, self._mp4_queue[self.racecar_index].qsize()))
+                
             except queue.Empty:
                 LOG.info("AgentsVideoEditor._mp4_queue['{}'] is empty. Stopping.".format(self.racecar_index))
                 self.unsubscribe_to_save_mp4()
+                self.throttle_thread.cancel()
+                self.camera_sub.destroy()
                 return
-
-            if frame_data:
-                edited_frames = self._edit_camera_images(frame_data, is_mp4=True)
-                
-                self.camera_pub.publish(edited_frames[FrameTypes.MAIN_CAMERA_FRAME.value])
-                mp4_queue_published += 1
-                LOG.info("Published {} frames.".format(mp4_queue_published))
 
 def main(args=None):
     rclpy.init(args=args)
