@@ -10,37 +10,12 @@ import threading
 from PIL import ImageFont, ImageDraw, Image
 
 from incar_video_pkg.logger import Logger
-from incar_video_pkg.constants import (RACECAR_CIRCLE_RADIUS, CameraTypeParams)
 
 LOG = Logger(__name__, logging.INFO).get_logger()
 
 CUSTOM_FILES_PATH = "./output"
-CAMERA_PIP_MP4_LOCAL_PATH_FORMAT = os.path.join(CUSTOM_FILES_PATH,
-                                                "iteration_data/{}/camera-pip/video.mp4")
-CAMERA_45DEGREE_LOCAL_PATH_FORMAT = os.path.join(CUSTOM_FILES_PATH,
-                                                 "iteration_data/{}/camera-45degree/video.mp4")
-CAMERA_TOPVIEW_LOCAL_PATH_FORMAT = os.path.join(CUSTOM_FILES_PATH,
-                                                "iteration_data/{}/camera-topview/video.mp4")
-CAMERA_FORWARD_LOCAL_PATH_FORMAT = os.path.join(CUSTOM_FILES_PATH,
-                                                "iteration_data/{}/camera-forward/video.mp4")
+
 IMAGE_CACHE = dict()
-
-def plot_circle(image, x_pixel, y_pixel, color_rgb):
-    """Function used to draw a circle around the racecar given the pixel (x, y) value
-    and the color of the circle
-
-    Args:
-        image (Image): Top camera image
-        x_pixel (int): X value in the image pixel
-        y_pixel (int): Y value in the image pixel
-        color_rgb (tuple): RGB value in the form of tuple (255, 255, 255)
-
-    Returns:
-        Image: Edited image with the circle
-    """
-    center_coordinates = (int(x_pixel), int(y_pixel))
-    thickness = -1
-    return cv2.circle(image, center_coordinates, RACECAR_CIRCLE_RADIUS, color_rgb, thickness)
 
 def get_font(font_name, font_size):
     """Helper method that returns an ImageFont object for the desired font if
@@ -162,51 +137,6 @@ def get_speed_formatted_str(speed):
     speed_str = "{:0.2f}".format(round(speed, 2))
     return speed_str.zfill(5)
 
-
-def get_cameratype_params(racecar_name, agent_name):
-    """ The function initializes the camera information for different camera settings
-    This holds the location where the different camera mp4 are saved, also the topic
-    of the camera to subscribe to get the videos.
-    For the head to head racing, the top view camera is used to create graphics such
-    that the bigger circles are drawn on the agent. So it can be easily identified which
-    car is winning.
-
-    Arguments:
-        racecar_name (str): Name of the racecar
-        agent_name (str): Agent name of the racecar
-        is_f1_race_type (bool): Is this f1 race type
-    Returns:
-        (dict): camera information local path, topic, name
-    """
-    camera_info = dict()
-    camera_pip_path = CAMERA_PIP_MP4_LOCAL_PATH_FORMAT.format(agent_name)
-    camera_45degree_path = CAMERA_45DEGREE_LOCAL_PATH_FORMAT.format(agent_name)
-    camera_topview_path = CAMERA_TOPVIEW_LOCAL_PATH_FORMAT.format(agent_name)
-    camera_forward_path = CAMERA_FORWARD_LOCAL_PATH_FORMAT.format(agent_name)
-    create_folder_path([camera_pip_path, camera_45degree_path, camera_topview_path, camera_forward_path])
-
-    camera_info[CameraTypeParams.CAMERA_PIP_PARAMS] = {
-        'name': CameraTypeParams.CAMERA_PIP_PARAMS.value,
-        'topic_name': "/{}/deepracer/main_camera_stream".format(racecar_name),
-        'local_path': camera_pip_path
-    }
-    camera_info[CameraTypeParams.CAMERA_45DEGREE_PARAMS] = {
-        'name': CameraTypeParams.CAMERA_45DEGREE_PARAMS.value,
-        'topic_name': "/{}/main_camera/zed/rgb/image_rect_color".format(racecar_name),
-        'local_path': camera_45degree_path
-    }
-    camera_info[CameraTypeParams.CAMERA_TOPVIEW_PARAMS] = {
-            'name': CameraTypeParams.CAMERA_TOPVIEW_PARAMS.value,
-            'topic_name': "/sub_camera/zed/rgb/image_rect_color",
-            'local_path': camera_topview_path
-    }
-    camera_info[CameraTypeParams.CAMERA_FORWARD_PARAMS] = {
-            'name': CameraTypeParams.CAMERA_FORWARD_PARAMS.value,
-            'topic_name': "/video/mp4_stream",
-            'local_path': camera_forward_path
-    }
- 
-    return camera_info
 
 def resize_image(image, scale_ratio):
     """ Resize the image to a given scale

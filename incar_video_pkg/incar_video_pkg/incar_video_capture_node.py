@@ -6,13 +6,12 @@
 #                                                            #
 ##############################################################
 import logging
-from threading import Thread, Event
 
 import rclpy
 from rclpy.time import Time
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from sensor_msgs.msg import Imu

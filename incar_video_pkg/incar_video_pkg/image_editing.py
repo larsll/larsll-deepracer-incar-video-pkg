@@ -13,7 +13,7 @@ from incar_video_pkg.logger import Logger
 
 from incar_video_pkg import utils
 from incar_video_pkg.constants import (RaceCarColorToRGB, TrackAssetsIconographicPngs, IconographicImageSize,
-                                  RACE_TYPE_TO_VIDEO_TEXT_MAPPING, XYPixelLoc, Mp4Parameter)
+                                  XYPixelLoc, Mp4Parameter)
 from incar_video_pkg.image_editing_interface import ImageEditingInterface
 
 LOG = Logger(__name__, logging.INFO).get_logger()

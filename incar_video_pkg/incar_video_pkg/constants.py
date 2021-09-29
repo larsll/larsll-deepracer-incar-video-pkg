@@ -8,32 +8,6 @@ IMU_TOPIC="/imu_msg/raw"
 PUBLISH_SENSOR_TOPIC="/video/sensor_stream"
 PUBLISH_VIDEO_TOPIC="/video/mp4_stream"
 
-
-class RaceType(Enum):
-    '''Enum containing the keys for race type
-    '''
-    TIME_TRIAL = "TIME_TRIAL"
-    OBJECT_AVOIDANCE = "OBJECT_AVOIDANCE"
-    HEAD_TO_BOT = "HEAD_TO_BOT"
-    HEAD_TO_MODEL = "HEAD_TO_MODEL"
-    F1 = "F1"
-    LIVE = "LIVE"
-
-class CameraTypeParams(Enum):
-    """ This Enum contains the all the params for each camera topics
-    Extends:
-        Enum
-    Variables:
-        PIP_PARAMS (dict): picture in picture related information
-        MAIN_CAMERA_PARAMS (dict): Main camera i.e, the camera view following the car
-        SUB_CAMERA_PARAMS (dict): Sub camera i.e, the top view of the track
-    """
-    CAMERA_PIP_PARAMS = "camera_pip_params"
-    CAMERA_45DEGREE_PARAMS = "camera_45degree_params"
-    CAMERA_TOPVIEW_PARAMS = "camera_topview_params"
-    CAMERA_FORWARD_PARAMS = "camera_forward_params"
-
-
 class Mp4Parameter(Enum):
     """
     Describes the parameters used to save Mp4
@@ -66,19 +40,6 @@ WAIT_TO_PREVENT_SPAM = 2
 # Radius of the circle plotted on the agent in pixels
 RACECAR_CIRCLE_RADIUS = 30
 
-# AWS Deepracer watermark
-AWS_DEEPRACER_WATER_MARK = "AWS DeepRacer"
-
-# Mapping the racetype to the text shown on the video
-RACE_TYPE_TO_VIDEO_TEXT_MAPPING = {
-    RaceType.TIME_TRIAL.value: "Time trial",
-    RaceType.OBJECT_AVOIDANCE.value: "Object avoidance",
-    RaceType.HEAD_TO_BOT.value: "Head-to-bot",
-    RaceType.HEAD_TO_MODEL.value: "Head-to-head",
-    RaceType.F1.value: "F1",
-    RaceType.LIVE.value: "In-Car Live"
-}
-
 # Decrease the minor image by a scale of provided number
 SCALE_RATIO = 2.5
 
@@ -102,7 +63,6 @@ class IconographicImageSize(Enum):
     VIRTUAL_EVENT_AGENTS_IMAGE_SIZE = (int(66 // SCALE_RATIO), int(66 // SCALE_RATIO))
     RACE_COMPLETE_IMAGE_SIZE = (308, 40)
 
-
 # Track iconography png enums
 class TrackAssetsIconographicPngs(Enum):
     """ Track images enum mapping
@@ -124,18 +84,6 @@ class TrackAssetsIconographicPngs(Enum):
     RACE_COMPLETE_OVERLAY_PNG = "DRL_video_racecomplete_overlay"
     HEAD_TO_HEAD_OVERLAY_PNG_LEAGUE_LEADERBOARD = "DRL_video_h2h_overlay_league_leaderboard"
     OBSTACLE_OVERLAY_PNG_LEAGUE_LEADERBOARD = "DRL_video_oa_overlay_league_leaderboard"
-    #F1
-    F1_LOGO_PNG = "F1_logo_official"
-    F1_OVERLAY_DEFAULT_PNG = "F1_video_overlay_default"
-    F1_OVERLAY_MIDWAY_PNG = "F1_video_overlay_midway"
-    F1_OVERLAY_FINISHERS_PNG = "F1_video_overlay_finishers"
-    F1_OVERLAY_TOPVIEW_2BOX_PNG = "F1_video_overlay_topview_2box"
-    F1_OVERLAY_TOPVIEW_3BOX_PNG = "F1_video_overlay_topview_3box"
-    F1_AGENTS_PNG = "./oval/oval"
-    F1_AGENTS_NUM_PNG = "./numbers/number"
-    F1_AGENTS_SLASH_DISPLAY_ICON_PNG = "./slash/slash"
-    F1_AGENTS_RECT_DISPLAY_ICON_PNG = "./rectangle/rectangle"
-
 
 # virtual event png
 class VirtualEventIconographicPngs(Enum):
@@ -172,58 +120,7 @@ class XYPixelLoc(Enum):
 # Race completion flag y-offset
 RACE_COMPLETE_Y_OFFSET = 180
 
-
-# Mapping the racetype to the text shown on the video
-class FrameQueueData(Enum):
-    """ Enum for frame data put into the queue
-    """
-    FRAME = "frame",
-    AGENT_METRIC_INFO = "agent_metric_info",
-    TRAINING_PHASE = "training_phase"
-
-
 # Agent Video editor constants
 MAX_FRAMES_IN_QUEUE = 2700
 KVS_PUBLISH_PERIOD = 1.0/15.0
 QUEUE_WAIT_TIME = 10 # In seconds
-
-# virtual event prepare digit font
-VIRTUAL_EVENT_PREPARE_DIGIT_FONT = 100
-
-
-class ModelImgNames(Enum):
-    """ Mapping the different objects and agents image
-
-    Attributes:
-        OBJECT_IMGS: This could be boxes or the bots
-        AGENT_IMGS: This is the agents image
-        AGENT_NUM_IMGS: This is the agent number, used only in F1
-    """
-    OBJECT_IMGS = "object_imgs"
-    AGENT_IMGS = "agent_imgs"
-    AGENT_NUM_IMGS = "agent_num_imgs"
-
-
-class FrameTypes(Enum):
-    """ Different frames to be edited as part of Mp4 and KVS
-
-    Attributes:
-        MAIN_CAMERA_FRAME: Frames coming from 45degree camera
-        TOP_CAMERA_FRAME: Frames from the top view camera
-    """
-    MAIN_CAMERA_FRAME = "main_camera_frame"
-    TOP_CAMERA_FRAME = "top_camera_frame"
-
-
-# Fader constants
-class VirtualEventFader(Enum):
-    """ These constants are used for virtual event fader class
-
-    Attributes:
-        FADING_MIN_PERCENT (float): Starting multiplier to gradient alpha value.
-        FADING_MAX_PERCENT (float): Ending multiplier to gradient alpha value
-        NUM_FRAMES (int): Number of frames the fading transitions occur.30 Frames = 2seconds if 15 FPS
-    """
-    FADING_MIN_PERCENT = 0
-    FADING_MAX_PERCENT = 0.75
-    NUM_FRAMES = 75

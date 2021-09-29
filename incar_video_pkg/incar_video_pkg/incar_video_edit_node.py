@@ -12,18 +12,16 @@ import queue
 import cv2
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
-from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as ROSImg
 
-from incar_video_pkg.constants import (RaceType, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
-                                  RaceCarColorToRGB, Mp4Parameter, FrameQueueData, MAX_FRAMES_IN_QUEUE,
-                                  KVS_PUBLISH_PERIOD, QUEUE_WAIT_TIME, FrameTypes)
+from incar_video_pkg.constants import (PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
+                                  Mp4Parameter, MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME)
 
 from incar_video_pkg.image_editing import ImageEditing
 from incar_video_pkg.logger import Logger
@@ -31,8 +29,7 @@ from incar_video_pkg.logger import Logger
 from deepracer_interfaces_pkg.msg import EvoSensorMsg
 
 from incar_video_pkg import utils
-from incar_video_pkg.utils import DoubleBuffer, force_list, log_and_exit
-from incar_video_pkg.save_to_mp4 import SaveToMp4
+from incar_video_pkg.utils import DoubleBuffer
 
 LOG = Logger(__name__, logging.INFO).get_logger()
 
