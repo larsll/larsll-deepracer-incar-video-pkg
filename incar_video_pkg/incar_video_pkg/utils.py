@@ -10,10 +10,7 @@ import threading
 from PIL import ImageFont, ImageDraw, Image
 
 from incar_video_pkg.logger import Logger
-from incar_video_pkg.constants import (RACECAR_CIRCLE_RADIUS, CameraTypeParams,
-                                  IconographicImageSize, SCALE_RATIO,
-                                  TrackColors,
-                                  SECTOR_COLORS_DICT)
+from incar_video_pkg.constants import (RACECAR_CIRCLE_RADIUS, CameraTypeParams)
 
 LOG = Logger(__name__, logging.INFO).get_logger()
 
@@ -338,87 +335,6 @@ def apply_gradient(main_image, gradient_alpha_rgb_mul, one_minus_gradient_alpha)
             (main_image[:, :, channel] * one_minus_gradient_alpha)
     return main_image
 
-def racecar_name_to_agent_name(racecars_info, racecar_name):
-    """ Given the racecars_info as list and the racecar_name and racecar_name
-    get the agent name
-
-    Arguments:
-        racecars_info (list): List of racecars_info
-        racecar_name (str): Racecar name
-    """
-    return 'agent' if len(racecars_info) == 1 else "agent_{}".format(racecar_name.split("_")[1])
-
-
-def overlay_sector_color_on_track(major_cv_image, sector_img, x_min, x_max, y_min, y_max):
-    """overlay the sector_img on top of major_cv_image at input location
-
-    Args:
-        major_cv_image (Image): major cv image as background
-        sector_img (Image): overlay foreground cv image
-        x_min (int): x min location for overlay foreground sector image
-        x_max (int): x max location for overlay foreground sector image
-        y_min (int): y min location for overlay foreground sector image
-        y_max (int): y max location for overlay foreground sector image
-
-    Returns:
-        Image: combined image with foreground sector image on top of major cv image.
-    """
-    track_sector_icongraphy_scaled = resize_image(sector_img, SCALE_RATIO)
-    track_sector_icongraphy_alpha = track_sector_icongraphy_scaled[:, :, 3] / 255.0
-
-    for channel in range(0, 4):
-        major_cv_image[x_min:x_max, y_min:y_max, channel] =\
-            (track_sector_icongraphy_alpha * track_sector_icongraphy_scaled[:, :, channel]) + \
-            (1 - track_sector_icongraphy_alpha) * (major_cv_image[x_min:x_max, y_min:y_max, channel])
-
-    return major_cv_image
-
-
-def get_sector_color(best_session_time, best_personal_time, current_personal_time):
-    """compare the current personal sector time with best sector time and
-    best personal sector time to determine sector overlay color by return the
-    path to the image.
-
-    Green for personal best, yellow for slower sectors, and purple for session best.
-
-    Args:
-        best_session_time (int): best session sector time in milliseconds
-        best_personal_time (int): best personal sector time in milliseconds
-        current_personal_time (int): current personal sector time in milliseconds
-
-    Returns:
-        str: Purple for session best, Green for personal best. Otherwise, yellow
-    """
-
-    # current personal time faster than best personal and best session time
-    if current_personal_time <= best_personal_time and current_personal_time <= best_session_time:
-        return TrackColors.PURPLE.value
-    # current personal time faster than best personal only
-    elif current_personal_time <= best_personal_time:
-        return TrackColors.GREEN.value
-    # current personal time is worse
-    else:
-        return TrackColors.YELLOW.value
-
-
-def init_sector_img_dict(world_name, sector):
-    """initialize sector color overlay images dictionary
-
-    Args:
-        world_name (str): current gazebo world name
-        sector (str): sector name such as sector1 for example
-    
-    Returns:
-        dict: sector img overlay dictionary with key as sector name + color name (sector1_yellow)
-        and value as the Image.
-    """
-    sector_img_dict = dict()
-    for color in TrackColors:
-        sector_image = \
-            get_image(world_name + SECTOR_COLORS_DICT[sector + "_" + color.value])
-        sector_image = cv2.cvtColor(sector_image, cv2.COLOR_RGBA2BGRA)
-        sector_img_dict[color.value] = sector_image
-    return sector_img_dict
 
 class DoubleBuffer(object):
     def __init__(self, clear_data_on_get=True):

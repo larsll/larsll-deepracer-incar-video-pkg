@@ -146,94 +146,27 @@ class VirtualEventIconographicPngs(Enum):
     FINAL_FADING_IMAGE_50ALPHA = "final_fading_image_50alpha"
 
 
-class TrackColors(Enum):
-    """track sector colors
-    """
-    YELLOW = 'yellow'
-    GREEN = 'green'
-    PURPLE = 'purple'
-
-
-class TrackSectorColors(Enum):
-    """ track sector names and colors permutation
-    """
-    SECTOR1_YELLOW = 'sector1_yellow'
-    SECTOR1_GREEN = 'sector1_green'
-    SECTOR1_PURPLE = 'sector1_purple'
-    SECTOR2_YELLOW = 'sector2_yellow'
-    SECTOR2_GREEN = 'sector2_green'
-    SECTOR2_PURPLE = 'sector2_purple'
-    SECTOR3_YELLOW = 'sector3_yellow'
-    SECTOR3_GREEN = 'sector3_green'
-    SECTOR3_PURPLE = 'sector3_purple'
-
-
-SECTOR_COLORS_DICT = \
-    {TrackSectorColors.SECTOR1_YELLOW.value: "_virtual_event/track_layer_01_yellow",
-     TrackSectorColors.SECTOR1_GREEN.value: "_virtual_event/track_layer_01_green",
-     TrackSectorColors.SECTOR1_PURPLE.value: "_virtual_event/track_layer_01_purple",
-     TrackSectorColors.SECTOR2_YELLOW.value: "_virtual_event/track_layer_02_yellow",
-     TrackSectorColors.SECTOR2_GREEN.value: "_virtual_event/track_layer_02_green",
-     TrackSectorColors.SECTOR2_PURPLE.value: "_virtual_event/track_layer_02_purple",
-     TrackSectorColors.SECTOR3_YELLOW.value: "_virtual_event/track_layer_03_yellow",
-     TrackSectorColors.SECTOR3_GREEN.value: "_virtual_event/track_layer_03_green",
-     TrackSectorColors.SECTOR3_PURPLE.value: "_virtual_event/track_layer_03_purple"}
-
-
-class VirtualEventMP4Params(Enum):
-    """virtual event info dict for image editing state machine
-    """
-    IS_LEAGUE = 'is_league_leaderboard'
-    COUNTDOWN_TIMER = 'countdown_timer'
-    MAJOR_CV_IMAGE = 'major_cv_image'
-    DISPLAY_NAME = 'display_name'
-    CURRENT_LAP = 'current_lap'
-    TOTAL_EVAL_SECONDS = 'total_eval_milli_seconds'
-    RESET_COUNTER = 'reset_counter'
-    SPEED = 'speed'
-    CURR_PROGRESS = 'current_progress'
-    LAST_EVAL_SECONDS = 'last_eval_time'
-    X_MIN = 'x_min'
-    X_MAX = 'x_max'
-    Y_MIN = 'y_min'
-    Y_MAX = 'y_max'
-    SECTOR_TIMES = 'sector_times'
-    BEST_LAP_TIME = 'best_lap_time'
-    CURR_LAP_TIME = 'curr_lap_time'
-    SECTOR_IMAGES = 'sector_images'
-    FADER_OBJ = 'fader_obj'
-
-
 class XYPixelLoc(Enum):
     """ The mp4 image size is (480, 640). Rendering text at different locations
     """
     MULTI_AGENT_DISPLAY_NAME_LOC = [(10, 10), (450, 10)]
     MULTI_AGENT_EVAL_TIME = (240, 10)
     SINGLE_AGENT_DISPLAY_NAME_LOC = (10, 10)
-    SPEED_LEADERBOARD_LOC = (10, 410)
-    SPEED_EVAL_LOC = (10, 420)
-    LEADERBOARD_NAME_LOC = (10, 435)
-    RACE_TYPE_EVAL_LOC = (10, 445)
+    TIME_LOC = (10, 410)
+    
+    ACCEL_X_LOC = (10, 435)
+    ACCEL_Y_LOC = (100, 435)
+    ACCEL_Z_LOC = (190, 435)
+
+    ANGULAR_X_LOC = (10, 455)
+    ANGULAR_Y_LOC = (100, 455)
+    ANGULAR_Z_LOC = (190, 455)
+
     RACE_TYPE_RACE_LOC = (10, 455)
     AWS_DEEPRACER_WATER_MARK_LOC = (445, 450)
     TRAINING_PHASE_LOC = (40, 400)
     TRACK_IMG_WITH_OFFSET_LOC = (0, 20)
     TRACK_IMG_WITHOUT_OFFSET_LOC = (0, 0)
-
-
-class VirtualEventXYPixelLoc(Enum):
-    TRACK_IMG_VIRTUAL_EVENT_LOC = (0, 0)
-    ICON = (30, 452)
-    TIME_REMAINING_DIGIT = (60, 425)
-    TIME_REMAINING_TEXT = (60, 460)
-    SPEED_DIGIT = (220, 425)
-    SPEED_TEXT = (220, 460)
-    RESET_DIGIT = (350, 425)
-    RESET_TEXT = (350, 460)
-    CURRENT_LAP_TIME_DIGIT = (480, 425)
-    CURRENT_LAP_TIME_TEXT = (480, 460)
-    BEST_LAP_TIME_DIGIT = (480, 10)
-    BEST_LAP_TIME_TEXT = (480, 45)
 
 
 # Race completion flag y-offset

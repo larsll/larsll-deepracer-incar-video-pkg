@@ -36,7 +36,9 @@ class ImageEditing(ImageEditingInterface):
 
         # Store the font which we will use to write the phase with
         self.amazon_ember_regular_20px = utils.get_font('Amazon_Ember_Rg', 20)
+        self.amazon_ember_regular_18px = utils.get_font('Amazon_Ember_Rg', 18)
         self.amazon_ember_regular_16px = utils.get_font('Amazon_Ember_Rg', 16)
+
         self.amazon_ember_heavy_30px = utils.get_font('Amazon_Ember_Bd', 30)
         self.amazon_ember_light_18px = utils.get_font('Amazon_Ember_Lt', 18)
         self.amazon_ember_light_20px = utils.get_font('Amazon_Ember_Lt', 20)
@@ -79,47 +81,64 @@ class ImageEditing(ImageEditingInterface):
                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_20px,
                                                    font_color=RaceCarColorToRGB.White.value,
                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
-        # Lap Counter
-        loc_y += 30
+
         # total_evaluation_time (Race time)
+        loc_x, loc_y = XYPixelLoc.TIME_LOC.value
         if self.start_time == 0:
             self.start_time = Time.from_msg(imu_info.header.stamp).nanoseconds / 1e6
         
         total_eval_milli_seconds = Time.from_msg(imu_info.header.stamp).nanoseconds / 1e6 - self.start_time
         time_delta = datetime.timedelta(milliseconds=total_eval_milli_seconds)
-        total_eval_time_text = "Time | {}".format(utils.milliseconds_to_timeformat(time_delta))
+        total_eval_time_text = "{}".format(utils.milliseconds_to_timeformat(time_delta))
         major_cv_image = utils.write_text_on_image(image=major_cv_image, text=total_eval_time_text,
-                                                   loc=(loc_x, loc_y), font=self.amazon_ember_light_18px,
+                                                   loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
                                                    font_color=RaceCarColorToRGB.White.value,
                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
-        # Speed
-        loc_x, loc_y = XYPixelLoc.SPEED_EVAL_LOC.value
-        if self.is_league_leaderboard:
-            loc_x, loc_y = XYPixelLoc.SPEED_LEADERBOARD_LOC.value
 
-        #speed_text = "{} m/s".format(utils.get_speed_formatted_str(mp4_video_metrics_info[self.racecar_index].throttle))
-        speed_text = "{:.01f} m/s²".format(imu_info.linear_acceleration.x)
-        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=speed_text,
-                                                   loc=(loc_x, loc_y), font=self.amazon_ember_light_20px,
-                                                   font_color=RaceCarColorToRGB.White.value,
-                                                   font_shadow_color=RaceCarColorToRGB.Black.value)
-        # Leaderboard name
-        if self.is_league_leaderboard:
-            loc_x, loc_y = XYPixelLoc.LEADERBOARD_NAME_LOC.value
-            major_cv_image = utils.write_text_on_image(image=major_cv_image, text=self.leaderboard_name,
-                                                       loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
-                                                       font_color=RaceCarColorToRGB.White.value,
-                                                       font_shadow_color=RaceCarColorToRGB.Black.value)
-        # Evaluation type
-        loc_x, loc_y = XYPixelLoc.RACE_TYPE_EVAL_LOC.value
-        if self.is_league_leaderboard:
-            loc_x, loc_y = XYPixelLoc.RACE_TYPE_RACE_LOC.value
-        race_text = "race" if self.is_racing else "evaluation"
-        evaluation_type_txt = "{} {}".format(RACE_TYPE_TO_VIDEO_TEXT_MAPPING[self.race_type], race_text)
-        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=evaluation_type_txt,
-                                                   loc=(loc_x, loc_y), font=self.amazon_ember_light_italic_20px,
-                                                   font_color=RaceCarColorToRGB.White.value,
-                                                   font_shadow_color=RaceCarColorToRGB.Black.value)
+        # Acceleration
+        loc_x, loc_y = XYPixelLoc.ACCEL_X_LOC.value
+        accel_x_text = "{:.01f} m/s²".format(imu_info.linear_acceleration.x)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=accel_x_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
+
+        loc_x, loc_y = XYPixelLoc.ACCEL_Y_LOC.value
+        accel_y_text = "{:.01f} m/s²".format(imu_info.linear_acceleration.y)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=accel_y_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
+
+        loc_x, loc_y = XYPixelLoc.ACCEL_Z_LOC.value
+        accel_z_text = "{:.01f} m/s²".format(imu_info.linear_acceleration.z)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=accel_z_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
+
+        # Gyro
+        loc_x, loc_y = XYPixelLoc.ANGULAR_X_LOC.value
+        angular_x_text = "{:.01f} rad/s".format(imu_info.angular_velocity.x)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=angular_x_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
+
+        loc_x, loc_y = XYPixelLoc.ANGULAR_Y_LOC.value
+        angular_y_text = "{:.01f} rad/s".format(imu_info.angular_velocity.y)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=angular_y_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)
+
+        loc_x, loc_y = XYPixelLoc.ANGULAR_Z_LOC.value
+        angular_z_text = "{:.01f} rad/s".format(imu_info.angular_velocity.z)
+        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=angular_z_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_regular_16px,
+                                                    font_color=RaceCarColorToRGB.White.value,
+                                                    font_shadow_color=RaceCarColorToRGB.Black.value)      
+        
 
         major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2BGRA)
         return major_cv_image

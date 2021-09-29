@@ -5,26 +5,23 @@
 #   All Rights Reserved.                                     #
 #                                                            #
 ##############################################################
-import sys
-import time
+
 import logging
-from threading import Thread
+from threading import Thread, Event
 import queue
 import cv2
 import rclpy
-from rclpy.timer import Timer
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
-from rclpy.exceptions import (ROSInterruptException)
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 
-from std_srvs.srv import Empty
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image as ROSImg
-from std_msgs.msg import String
 
-from incar_video_pkg.constants import (RaceType, CameraTypeParams, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
+from incar_video_pkg.constants import (RaceType, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
                                   RaceCarColorToRGB, Mp4Parameter, FrameQueueData, MAX_FRAMES_IN_QUEUE,
                                   KVS_PUBLISH_PERIOD, QUEUE_WAIT_TIME, FrameTypes)
 
@@ -46,10 +43,12 @@ class InCarVideoEditNode(Node):
     the image topic produced by this node.
     """
     _agents_metrics = list()
-    _mp4_queue = list()
+    _frame_queue = list()
 
-    def __init__(self, racecar_name="DeepRacer", is_publish_to_live_stream=True):
+    def __init__(self):
         super().__init__('incar_video_edit_node')
+
+        self.stop_node = Event()
         #
         # We have no guarantees as to when gazebo will load the model, therefore we need
         # to wait until the model is loaded and markov packages has spawned all the models
@@ -58,49 +57,30 @@ class InCarVideoEditNode(Node):
 
         self._agents_metrics.append(DoubleBuffer(clear_data_on_get=False))
 
-        self.declare_parameter('VIDEO_JOB_TYPE', "RACING")
-        self.declare_parameter('LEADERBOARD_TYPE', "LEAGUE")
-        self.declare_parameter('LEADERBOARD_NAME', "TEST")
-        self.declare_parameter('NUMBER_OF_TRIALS', 1)
+        self.declare_parameter('racecar_name', 'DeepRacer', ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
+        self.declare_parameter('publish_stream', False, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
+        self.declare_parameter('save_to_mp4', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
 
-        self.racecar_name = racecar_name
-        self.racecar_index = 0
-        self._is_publish_to_live_stream = is_publish_to_live_stream
-        self.is_training = False
+        self._racecar_name = self.get_parameter('racecar_name').value
+        self._publish_to_topic = self.get_parameter('publish_stream').value
+        self._save_to_mp4 = self.get_parameter('save_to_mp4').value
 
         # init cv bridge
         self.bridge = CvBridge()
 
-        # This determines what kind of image editing should be done based on the race type
-        self.race_type = RaceType.LIVE.value
-        self.top_camera_mp4_pub = False
-        #
         # Two job types are required because in the F1 editing we have static variables
         # to compute the gap and ranking. With Mp4 stacking frames, these values would be already updated by KVS.
         # If same class is used then during the finish phase you see all the racers information at once
         # and not updated real time when racers finish the lap.
         # %TODO seperate out the kvs and Mp4 functionality
         #
-        self.job_type_image_edit_mp4 = ImageEditing(self.racecar_name, None, self.race_type)
+        self.job_type_image_edit_mp4 = ImageEditing(self._racecar_name, None, None)
 
         # All Mp4 related initialization
-        self._mp4_queue.append(queue.Queue())
+        self._frame_queue = queue.Queue()
         self._mp4_queue_pushed = 0
         self._edit_queue_pushed = 0
-        # Initialize save mp4 ROS service for the markov package to signal when to
-        # start and stop collecting video frames
-        camera_info = utils.get_cameratype_params(self.racecar_name, self.racecar_name)
-        self.save_to_mp4_obj = SaveToMp4(camera_infos=[camera_info[CameraTypeParams.CAMERA_FORWARD_PARAMS]],
-                                         fourcc=Mp4Parameter.FOURCC.value,
-                                         fps=Mp4Parameter.FPS.value,
-                                         frame_size=Mp4Parameter.FRAME_SIZE.value)
 
-        # Publisher to broadcast the notification messages.
-        self.camera_cbg = ReentrantCallbackGroup()
-        self.camera_pub = self.create_publisher(ROSImg,
-                                  PUBLISH_VIDEO_TOPIC,
-                                  250,
-                                  callback_group=self.camera_cbg)
 
     def __enter__(self):
         self._main_camera_frame_buffer = DoubleBuffer(clear_data_on_get=True)
@@ -111,62 +91,35 @@ class InCarVideoEditNode(Node):
                                  5,
                                  callback_group=self.camera_sub_cbg)
 
-        self.subscribe_to_save_mp4()
+        # self.subscribe_to_save_mp4()
         self.consumer_thread = Thread(target=self._consumer_mp4_frame_thread)
         self.consumer_thread.start()
 
-        self.throttle_thread = self.create_timer(1.0/Mp4Parameter.FPS.value, self._throttle_thread)
+        # Publisher to broadcast the edited video stream.
+        if self._publish_to_topic:
+            self.camera_cbg = ReentrantCallbackGroup()
+            self.camera_pub = self.create_publisher(ROSImg,
+                                    PUBLISH_VIDEO_TOPIC,
+                                    250,
+                                    callback_group=self.camera_cbg)
+
+        # Saving to MP4
+        if self._save_to_mp4:
+            self.cv2_video_writer = cv2.VideoWriter('output/video.mp4', Mp4Parameter.FOURCC.value, Mp4Parameter.FPS.value, Mp4Parameter.FRAME_SIZE.value)
+
+        self.throttle_timer = self.create_timer(1.0/Mp4Parameter.FPS.value, self._throttle_timer_callback)
 
         return self
 
     def __exit__(self, ExcType, ExcValue, Traceback):
         """Called when the object is destroyed.
         """
-        self.get_logger().info('Exiting.')
-
-    def subscribe_to_save_mp4(self):
-        """ Ros service handler function used to subscribe to the Image topic.
-        Arguments:
-            req (req): Dummy req else the ros service throws exception
-        Return:
-            [] - Empty list else ros service throws exception
-        """
-        self.is_save_mp4_enabled = True
-        self.save_to_mp4_obj.subscribe_to_save_mp4(self)
-        return []
-
-    def unsubscribe_to_save_mp4(self):
-        """ Ros service handler function used to unsubscribe from the Image topic.
-        This will take care of cleaning and releasing the cv2 VideoWriter
-        Arguments:
-            req (req): Dummy req else the ros service throws exception
-        Return:
-            [] - Empty list else ros service throws exception
-        """
-        self.is_save_mp4_enabled = True
-        # This is required because when unsubscribe call is made the frames in the queue will continue editing,
-        # but at this time the 45degree camera will continue to be subscribed and saved to mp4 which we do not want.
-        camera_topics_stop_immediately, camera_topics_stop_post_empty_queue = list(), list()
-        if not self.top_camera_mp4_pub:
-            camera_topics_stop_immediately = [CameraTypeParams.CAMERA_45DEGREE_PARAMS.value,
-                                              CameraTypeParams.CAMERA_TOPVIEW_PARAMS.value]
-            camera_topics_stop_post_empty_queue = [CameraTypeParams.CAMERA_PIP_PARAMS.value,
-                                                    CameraTypeParams.CAMERA_FORWARD_PARAMS.value]
-        else:
-            camera_topics_stop_immediately = [CameraTypeParams.CAMERA_45DEGREE_PARAMS.value]
-            camera_topics_stop_post_empty_queue = [CameraTypeParams.CAMERA_TOPVIEW_PARAMS.value,
-                                                   CameraTypeParams.CAMERA_PIP_PARAMS.value,
-                                                   CameraTypeParams.CAMERA_FORWARD_PARAMS.value]
-
-        self.save_to_mp4_obj.unsubscribe_to_save_mp4(camera_topics_stop_immediately)
-        LOG.info("Waiting to flush the Mp4 queue for racecar_{}...".format(self.racecar_index))
-        while not self._mp4_queue[self.racecar_index].empty():
-            time.sleep(1)
-        LOG.info("Done flushing the Mp4 queue for racecar_{}...".format(self.racecar_index))
-        self.save_to_mp4_obj.unsubscribe_to_save_mp4(camera_topics_stop_post_empty_queue)
-
+        self.get_logger().info('Stopping.')
+        self.stop_node.set()
+        self.consumer_thread.join()
+        self.get_logger().info('Done.')
         
-    def _edit_main_camera_images(self, frame_data, edited_frame_result):
+    def _edit_main_camera_image(self, frame_data):
         """ Thread to edit main camera frames
 
         Args:
@@ -180,26 +133,7 @@ class InCarVideoEditNode(Node):
 
         major_cv_image = self.job_type_image_edit_mp4.edit_image(major_cv_image, frame_data.imu_data)
 
-        edited_main_frame = self.bridge.cv2_to_imgmsg(major_cv_image, "bgr8")
-        edited_frame_result[FrameTypes.MAIN_CAMERA_FRAME.value] = edited_main_frame
-
-    def _edit_camera_images(self, frame_data, is_mp4):
-        """ Edit camera image by calling respective job type
-
-        Arguments:
-            frame_data (dict): Dictionary of frame, agent_metric_info, training_phase
-            is_mp4 (bool): Is this edit camera image for kvs or mp4
-
-        Returns:
-            Image: Edited image
-        """
-        # convert ros image message to cv image
-        try:
-            edited_frame_result = dict()
-            self._edit_main_camera_images(frame_data, edited_frame_result)
-            return edited_frame_result
-        except CvBridgeError as ex:
-            LOG.info("cv2 to ROS image message error: {}".format(ex))
+        return self.bridge.cv2_to_imgmsg(major_cv_image, "bgr8")
 
     def _producer_frame_callback(self, frame):
         """ Callback for the main input. Once a new image is received, all the required
@@ -216,17 +150,17 @@ class InCarVideoEditNode(Node):
             self._main_camera_frame_buffer.put(frame)
 
 
-    def _throttle_thread(self):
+    def _throttle_timer_callback(self):
 
         try:
             frame = self._main_camera_frame_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
 
-            if self._mp4_queue[self.racecar_index].qsize() == MAX_FRAMES_IN_QUEUE:
+            if self._frame_queue.qsize() == MAX_FRAMES_IN_QUEUE:
                 LOG.info("Dropping Mp4 frame from the queue")
-                self._mp4_queue[self.racecar_index].get()
+                self._frame_queue.get()
             
             # Append to the MP4 queue
-            self._mp4_queue[self.racecar_index].put(frame)
+            self._frame_queue.put(frame)
             self._mp4_queue_pushed += 1
 
             LOG.debug("Pushed {} frames to Edit Queue.".format(self._mp4_queue_pushed))
@@ -241,36 +175,54 @@ class InCarVideoEditNode(Node):
         """
 
         mp4_queue_published = 0
+        bridge = CvBridge()
 
-        while rclpy.ok():
+        while rclpy.ok() and not self.stop_node.is_set():
             frame_data = None
             try:
                 # Pop from the queue and edit the image
-                frame_data = self._mp4_queue[self.racecar_index].get(block=True, timeout=QUEUE_WAIT_TIME)
+                frame_data = self._frame_queue.get(block=True, timeout=QUEUE_WAIT_TIME)
 
                 if frame_data:
-                    edited_frames = self._edit_camera_images(frame_data, is_mp4=True)
+                    edited_frame = self._edit_main_camera_image(frame_data)
+                    
+                    if self._save_to_mp4:
+                        cv_image = bridge.imgmsg_to_cv2(edited_frame, "bgr8")
+                        self.cv2_video_writer.write(cv_image)
 
-                    self.camera_pub.publish(edited_frames[FrameTypes.MAIN_CAMERA_FRAME.value])
+                    if self._publish_to_topic:
+                        self.camera_pub.publish(edited_frame)
+
                     mp4_queue_published += 1
-                    LOG.info("Published {} frame to MP4 queue. {} frames in queue.".format(mp4_queue_published, self._mp4_queue[self.racecar_index].qsize()))
+                    LOG.info("Published {} frame to MP4 queue. {} frames in queue.".format(mp4_queue_published, self._frame_queue.qsize()))
                 
             except queue.Empty:
-                LOG.info("AgentsVideoEditor._mp4_queue['{}'] is empty. Stopping.".format(self.racecar_index))
-                self.unsubscribe_to_save_mp4()
-                self.throttle_thread.cancel()
-                self.camera_sub.destroy()
-                return
+                LOG.info("Frame buffer is empty. Stopping.")
+                self.stop_node.set()
+
+        if self._save_to_mp4:
+            self.cv2_video_writer.release()
+
+        if self._publish_to_topic:
+            self.destroy_publisher(self.camera_pub)
+
+        self.destroy_timer(self.throttle_timer)
+        self.destroy_subscription(self.camera_sub)
 
 def main(args=None):
-    rclpy.init(args=args)
-    with InCarVideoEditNode() as incar_video_edit_node:
-        executor = MultiThreadedExecutor()
-        rclpy.spin(incar_video_edit_node, executor)
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    incar_video_edit_node.destroy_node()
+
+    try:
+        rclpy.init(args=args)
+        with InCarVideoEditNode() as incar_video_edit_node:
+            executor = MultiThreadedExecutor()
+            rclpy.spin(incar_video_edit_node, executor)
+        # Destroy the node explicitly
+        # (optional - otherwise it will be done automatically
+        # when the garbage collector destroys the node object)
+        incar_video_edit_node.destroy_node()
+    except KeyboardInterrupt:
+        pass
+
     rclpy.shutdown()
 
 
