@@ -133,16 +133,19 @@ class InCarVideoCaptureNode(Node):
             LOG.error('Error in timer process.')
 
 def main(args=None):
-    rclpy.init(args=args)
-    with InCarVideoCaptureNode() as incar_video_capture_node:
-        executor = MultiThreadedExecutor()
-        rclpy.spin(incar_video_capture_node, executor)
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    incar_video_capture_node.destroy_node()
-    rclpy.shutdown()
 
+    try:
+        rclpy.init(args=args)
+        with InCarVideoCaptureNode() as incar_video_capture_node:
+            executor = MultiThreadedExecutor()
+            rclpy.spin(incar_video_capture_node, executor)
+        # Destroy the node explicitly
+        # (optional - otherwise it will be done automatically
+        # when the garbage collector destroys the node object)
+        incar_video_capture_node.destroy_node()
+        rclpy.shutdown()
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()
