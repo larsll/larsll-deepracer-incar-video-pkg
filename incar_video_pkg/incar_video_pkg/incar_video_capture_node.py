@@ -52,11 +52,11 @@ class InCarVideoCaptureNode(Node):
         self.stream_cbg = ReentrantCallbackGroup()
         self.stream_pub = self.create_publisher(EvoSensorMsg,
                                   constants.PUBLISH_SENSOR_TOPIC,
-                                  50)
+                                  10)
 
     def __enter__(self):
 
-        # ROS service to get video metrics
+        # Call ROS service to enable the Video Stream
         self.cli = self.create_client(VideoStateSrv, constants.VIDEO_STATE_SRV)
         while not self.cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().info('Camera service not available, waiting...')

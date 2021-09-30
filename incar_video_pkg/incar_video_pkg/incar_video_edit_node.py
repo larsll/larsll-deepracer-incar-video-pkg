@@ -46,11 +46,6 @@ class InCarVideoEditNode(Node):
         super().__init__('incar_video_edit_node')
 
         self.stop_node = Event()
-        #
-        # We have no guarantees as to when gazebo will load the model, therefore we need
-        # to wait until the model is loaded and markov packages has spawned all the models
-        #
-        ## rclpy.wait_for_service('/robomaker_markov_package_ready')
 
         self._agents_metrics.append(DoubleBuffer(clear_data_on_get=False))
 
@@ -71,7 +66,7 @@ class InCarVideoEditNode(Node):
         # and not updated real time when racers finish the lap.
         # %TODO seperate out the kvs and Mp4 functionality
         #
-        self.job_type_image_edit_mp4 = ImageEditing(self._racecar_name, None, None)
+        self.job_type_image_edit_mp4 = ImageEditing(self._racecar_name)
 
         # All Mp4 related initialization
         self._frame_queue = queue.Queue()
