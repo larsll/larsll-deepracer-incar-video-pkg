@@ -5,8 +5,10 @@ import os
 import logging
 import numpy as np
 import cv2
-import rospkg
 import threading
+
+from ament_index_python.packages import get_package_share_directory
+
 from PIL import ImageFont, ImageDraw, Image
 
 from incar_video_pkg.logger import Logger
@@ -50,7 +52,8 @@ def get_image(icon_name, img_size=None, is_rgb=False):
     if icon_name in IMAGE_CACHE:
         return IMAGE_CACHE[icon_name]
     try:
-        track_iconography_dir = '/opt/aws-addon/images/'
+        share_dir = get_package_share_directory('incar_video_pkg') 
+        track_iconography_dir = os.path.join(share_dir, 'images')
         image_path = os.path.join(track_iconography_dir, icon_name + '.png')
         image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
