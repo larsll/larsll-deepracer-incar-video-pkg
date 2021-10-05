@@ -29,7 +29,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name), ["launch/incar_video_pkg_launch.py"])
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools","pillow"],
     zip_safe=True,
     maintainer="Lars Ludvigsen",
     maintainer_email="lars@ludvig.no",

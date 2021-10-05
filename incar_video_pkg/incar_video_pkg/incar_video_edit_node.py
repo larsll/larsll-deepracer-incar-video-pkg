@@ -7,6 +7,7 @@
 ##############################################################
 
 import logging
+import time
 from threading import Thread, Event
 import queue
 import cv2
@@ -52,10 +53,15 @@ class InCarVideoEditNode(Node):
         self.declare_parameter('racecar_name', 'DeepRacer', ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
         self.declare_parameter('publish_stream', False, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
         self.declare_parameter('save_to_mp4', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
+        self.declare_parameter('output_file_name', 'deepracer-{}.mp4', ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
 
         self._racecar_name = self.get_parameter('racecar_name').value
         self._publish_to_topic = self.get_parameter('publish_stream').value
         self._save_to_mp4 = self.get_parameter('save_to_mp4').value
+        self._output_file_name = self.get_parameter('output_file_name').value
+
+        if "{}" in self._output_file_name:
+            self._output_file_name = self._output_file_name.format(time.strftime("%Y%m%d-%H%M%S"))
 
         # init cv bridge
         self.bridge = CvBridge()
@@ -97,7 +103,7 @@ class InCarVideoEditNode(Node):
 
         # Saving to MP4
         if self._save_to_mp4:
-            self.cv2_video_writer = cv2.VideoWriter('output/video.mp4', Mp4Parameter.FOURCC.value, Mp4Parameter.FPS.value, Mp4Parameter.FRAME_SIZE.value)
+            self.cv2_video_writer = cv2.VideoWriter(self._output_file_name, Mp4Parameter.FOURCC.value, Mp4Parameter.FPS.value, Mp4Parameter.FRAME_SIZE.value)
 
         self.throttle_timer = self.create_timer(1.0/Mp4Parameter.FPS.value, self._throttle_timer_callback)
 

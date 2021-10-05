@@ -47,6 +47,34 @@ class ImageEditing(ImageEditingInterface):
         gradient_img_path = TrackAssetsIconographicPngs.OBSTACLE_OVERLAY_PNG_LEAGUE_LEADERBOARD.value
         self.gradient_img = utils.get_image(gradient_img_path, Mp4Parameter.FRAME_SIZE.value)
         self.gradient_img = cv2.cvtColor(self.gradient_img, cv2.COLOR_RGBA2BGRA)
+
+        # Top left location of the picture
+        loc_x, loc_y = XYPixelLoc.SINGLE_AGENT_DISPLAY_NAME_LOC.value
+
+        # Display name (Racer name/Model name)
+        display_name = self.racecar_name
+        display_name_txt = display_name if len(display_name) < 15 else "{}...".format(display_name[:15])
+        self.gradient_img = utils.write_text_on_image(image=self.gradient_img, text=display_name_txt,
+                                                   loc=(loc_x, loc_y), font=self.amazon_ember_regular_20px,
+                                                   font_color=ColorMap.White.value,
+                                                   font_shadow_color=ColorMap.Black.value)
+
+        # Acceleration label
+        loc_x, loc_y = XYPixelLoc.ACCEL_LBL_LOC.value
+        accel_lbl_text = "Accel | m/s²"
+        self.gradient_img = utils.write_text_on_image(image=self.gradient_img, text=accel_lbl_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_light_16px,
+                                                    font_color=ColorMap.White.value,
+                                                    font_shadow_color=ColorMap.Black.value)
+
+        # Gyro label
+        loc_x, loc_y = XYPixelLoc.ANGULAR_LBL_LOC.value
+        gyro_lbl_text = "Gyro | rad/s "
+        self.gradient_img = utils.write_text_on_image(image=self.gradient_img, text=gyro_lbl_text,
+                                                    loc=(loc_x, loc_y), font=self.amazon_ember_light_16px,
+                                                    font_color=ColorMap.White.value,
+                                                    font_shadow_color=ColorMap.Black.value)
+
         self.gradient_alpha_rgb_mul, self.one_minus_gradient_alpha = utils.get_gradient_values(self.gradient_img)        
 
     def _edit_major_cv_image(self, major_cv_image, imu_info: Imu):
@@ -64,17 +92,6 @@ class ImageEditing(ImageEditingInterface):
         major_cv_image = utils.apply_gradient(major_cv_image, self.gradient_alpha_rgb_mul,
                                               self.one_minus_gradient_alpha)
 
-        # Top left location of the picture
-        loc_x, loc_y = XYPixelLoc.SINGLE_AGENT_DISPLAY_NAME_LOC.value
-
-        # Display name (Racer name/Model name)
-        display_name = self.racecar_name
-        display_name_txt = display_name if len(display_name) < 15 else "{}...".format(display_name[:15])
-        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=display_name_txt,
-                                                   loc=(loc_x, loc_y), font=self.amazon_ember_regular_20px,
-                                                   font_color=ColorMap.White.value,
-                                                   font_shadow_color=ColorMap.Black.value)
-
         # total_evaluation_time (Race time)
         loc_x, loc_y = XYPixelLoc.TIME_LOC.value
         if self.start_time == 0:
@@ -89,14 +106,6 @@ class ImageEditing(ImageEditingInterface):
                                                    font_shadow_color=ColorMap.Black.value)
 
         # Acceleration
-
-        loc_x, loc_y = XYPixelLoc.ACCEL_LBL_LOC.value
-        accel_lbl_text = "Accel [m/s²]"
-        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=accel_lbl_text,
-                                                    loc=(loc_x, loc_y), font=self.amazon_ember_light_16px,
-                                                    font_color=ColorMap.White.value,
-                                                    font_shadow_color=ColorMap.Black.value)
-
         loc_x, loc_y = XYPixelLoc.ACCEL_X_LOC.value
         accel_x_text = "{:+.1f}".format(imu_info.linear_acceleration.x)
         major_cv_image = utils.write_text_on_image(image=major_cv_image, text=accel_x_text,
@@ -122,13 +131,6 @@ class ImageEditing(ImageEditingInterface):
                                                     anchor="ra")
 
         # Gyro
-        loc_x, loc_y = XYPixelLoc.ANGULAR_LBL_LOC.value
-        gyro_lbl_text = "Gyro [rad/s] "
-        major_cv_image = utils.write_text_on_image(image=major_cv_image, text=gyro_lbl_text,
-                                                    loc=(loc_x, loc_y), font=self.amazon_ember_light_16px,
-                                                    font_color=ColorMap.White.value,
-                                                    font_shadow_color=ColorMap.Black.value)
-
         loc_x, loc_y = XYPixelLoc.ANGULAR_X_LOC.value
         angular_x_text = "{:+.1f}".format(imu_info.angular_velocity.x)
         major_cv_image = utils.write_text_on_image(image=major_cv_image, text=angular_x_text,

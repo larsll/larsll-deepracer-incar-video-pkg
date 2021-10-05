@@ -14,12 +14,14 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+
 from sensor_msgs.msg import Imu
 
 from incar_video_pkg.logger import Logger
 from incar_video_pkg.utils import DoubleBuffer
 from incar_video_pkg import constants
-from incar_video_pkg.constants import (Mp4Parameter)
+from incar_video_pkg.constants import Mp4Parameter
 
 from deepracer_interfaces_pkg.srv import VideoStateSrv
 from deepracer_interfaces_pkg.msg import EvoSensorMsg, CameraMsg
@@ -37,6 +39,11 @@ class InCarVideoCaptureNode(Node):
     def __init__(self):
         super().__init__('incar_video_capture_node')
        
+
+        # Duplicate frames -- if no new image frame is available then push the previous one.
+        self.declare_parameter('duplicate_frame', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
+        self._duplicate_frame = self.get_parameter('duplicate_frame').value
+
         # Fetching main camera frames, start consumer thread and producer thread for main camera frame
         self.main_camera_topic = constants.MAIN_CAMERA_TOPIC
         self.imu_topic = constants.IMU_TOPIC
@@ -66,7 +73,7 @@ class InCarVideoCaptureNode(Node):
         req.activate_video = 1
         _ = self.cli.call_async(req)
 
-        self._camera_data_buffer = DoubleBuffer(clear_data_on_get=False)
+        self._camera_data_buffer = DoubleBuffer(clear_data_on_get=self._duplicate_frame)
         self.camera_sub_cbg = ReentrantCallbackGroup()
         self.camera_sub = self.create_subscription(CameraMsg,
                                  self.main_camera_topic,
