@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-##############################################################
-#                                                            #
-#   Copyright 2019 Amazon.com, Inc. or its affiliates.       #
-#   All Rights Reserved.                                     #
-#                                                            #
-##############################################################
 import logging
 
 import rclpy

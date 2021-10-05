@@ -27,7 +27,8 @@ setup(
         ("share/ament_index/resource_index/packages",
             ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        (os.path.join("share", package_name), ["launch/incar_video_pkg_launch.py"])
+        (os.path.join("share", package_name), ["launch/incar_video_pkg_launch.py"]),
+        (os.path.join("share", package_name, "images"), ["resource/images/DRL_video_oa_overlay_league_leaderboard.png"])
     ],
     install_requires=["setuptools","pillow"],
     zip_safe=True,

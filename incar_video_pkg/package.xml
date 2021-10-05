@@ -16,6 +16,7 @@
   <depend>camera_pkg</depend>
   <depend>imu_pkg</depend>
   <depend>cv_bridge</depend>
+  <depend>BMI160_i2c</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
