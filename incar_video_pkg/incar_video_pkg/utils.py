@@ -31,7 +31,8 @@ def get_font(font_name, font_size):
         ImageFont: ImageFont object with the given font name
     """
     try:
-        font_dir = "/opt/aws/deepracer/lib/device_console/static/bootstrap/3.3.7/AmazonEmber/"
+        share_dir = get_package_share_directory('incar_video_pkg') 
+        font_dir = os.path.join(share_dir, 'AmazonEmber')
         font_path = os.path.join(font_dir, font_name + '.ttf')
         font = ImageFont.truetype(font_path, font_size)
     except (OSError, IOError):
