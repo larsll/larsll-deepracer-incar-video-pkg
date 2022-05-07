@@ -38,14 +38,18 @@ class InCarVideoCaptureNode(Node):
         self.declare_parameter('duplicate_frame', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
         self._duplicate_frame = self.get_parameter('duplicate_frame').value
 
+        # FPS value
+        self.declare_parameter('fps', Mp4Parameter.FPS.value, ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER))
+        self._fps = self.get_parameter('fps').value
+
         # Fetching main camera frames, start consumer thread and producer thread for main camera frame
         self.main_camera_topic = constants.MAIN_CAMERA_TOPIC
         self.imu_topic = constants.IMU_TOPIC
         self.last_publish = self.get_clock().now()
         self.qos_profile = QoSProfile(
-            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
-            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
-            depth=1
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
+            depth=100
         )
 
 
@@ -53,7 +57,7 @@ class InCarVideoCaptureNode(Node):
         self.stream_cbg = ReentrantCallbackGroup()
         self.stream_pub = self.create_publisher(EvoSensorMsg,
                                   constants.PUBLISH_SENSOR_TOPIC,
-                                  10)
+                                  self.qos_profile)
 
     def __enter__(self):
 
@@ -84,7 +88,7 @@ class InCarVideoCaptureNode(Node):
                                  callback_group=self.imu_sub_cbg)
 
 
-        self.timer = self.create_timer(1/Mp4Parameter.FPS.value,self._timer_processor)
+        self.timer = self.create_timer(1/self._fps,self._timer_processor)
 
         return self
 
