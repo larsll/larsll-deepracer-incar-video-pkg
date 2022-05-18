@@ -6,6 +6,7 @@ from threading import Thread, Event
 import queue
 import cv2
 import rclpy
+from rclpy.time import Time
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -16,12 +17,13 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as ROSImg
 
 from incar_video_pkg.constants import (PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
-                                  Mp4Parameter, MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME)
+                                  Mp4Parameter, MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV)
 
 from incar_video_pkg.image_editing import ImageEditing
 from incar_video_pkg.logger import Logger
 
 from deepracer_interfaces_pkg.msg import EvoSensorMsg
+from deepracer_interfaces_pkg.srv import VideoStateSrv
 
 from incar_video_pkg import utils
 from incar_video_pkg.utils import DoubleBuffer
@@ -74,6 +76,7 @@ class InCarVideoEditNode(Node):
         self._frame_queue = queue.Queue()
         self._mp4_queue_pushed = 0
         self._edit_queue_pushed = 0
+        self._last_image_seen = 0
 
 
     def __enter__(self):
@@ -84,6 +87,16 @@ class InCarVideoEditNode(Node):
                                  self._producer_frame_callback,
                                  5,
                                  callback_group=self.camera_sub_cbg)
+
+        # Call ROS service to enable the Video Stream
+        self.cli = self.create_client(VideoStateSrv, VIDEO_STATE_SRV)
+        while not self.cli.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info('Camera service not available, waiting...')
+
+        self.get_logger().info("Camera service available, enabling video stream.")
+        req = VideoStateSrv.Request()
+        req.activate_video = 1
+        _ = self.cli.call_async(req)
 
         # self.subscribe_to_save_mp4()
         self.consumer_thread = Thread(target=self._consumer_mp4_frame_thread)
@@ -101,7 +114,7 @@ class InCarVideoEditNode(Node):
         if self._save_to_mp4:
             self.cv2_video_writer = cv2.VideoWriter(self._output_file_name, Mp4Parameter.FOURCC.value, self._fps, Mp4Parameter.FRAME_SIZE.value)
 
-        self.throttle_timer = self.create_timer(1.0/self._fps, self._throttle_timer_callback)
+        self.throttle_timer = self.create_timer(1.0/(self._fps * 2), self._throttle_timer_callback)
 
         return self
 
@@ -152,7 +165,14 @@ class InCarVideoEditNode(Node):
             if self._frame_queue.qsize() == MAX_FRAMES_IN_QUEUE:
                 LOG.info("Dropping Mp4 frame from the queue")
                 self._frame_queue.get()
-            
+                                  
+            new_image_seen = int(frame.images[0].header.frame_id)
+
+            if (new_image_seen - self._last_image_seen > 1):
+                LOG.warn(f"Image gap: { new_image_seen } of {new_image_seen - self._last_image_seen}")
+
+            self._last_image_seen = new_image_seen
+
             # Append to the MP4 queue
             self._frame_queue.put(frame)
             self._mp4_queue_pushed += 1

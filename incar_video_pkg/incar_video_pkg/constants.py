@@ -5,7 +5,7 @@ import cv2
 MAIN_CAMERA_TOPIC="/camera_pkg/display_mjpeg"
 VIDEO_STATE_SRV="/camera_pkg/media_state"
 IMU_TOPIC="/imu_pkg/imu_raw"
-PUBLISH_SENSOR_TOPIC="/video/sensor_stream"
+PUBLISH_SENSOR_TOPIC="/sensor_fusion_pkg/sensor_msg"
 PUBLISH_VIDEO_TOPIC="/video/mp4_stream"
 
 class Mp4Parameter(Enum):
