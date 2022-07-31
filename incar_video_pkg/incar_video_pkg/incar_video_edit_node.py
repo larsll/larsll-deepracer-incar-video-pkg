@@ -40,7 +40,7 @@ class InCarVideoEditNode(Node):
     def __init__(self):
         super().__init__('incar_video_edit_node')
 
-        self.stop_node = Event()
+        self.recording_active = Event()
 
         self._agents_metrics.append(DoubleBuffer(clear_data_on_get=False))
 
@@ -117,7 +117,7 @@ class InCarVideoEditNode(Node):
         """Called when the object is destroyed.
         """
         self.get_logger().info('Stopping.')
-        self.stop_node.set()
+        self.recording_active.clear()
         self.consumer_thread.join()
         self.get_logger().info('Done.')
         
@@ -152,7 +152,7 @@ class InCarVideoEditNode(Node):
             self._main_camera_frame_buffer.put(frame)
 
             # On first receive start thread and timer
-            if not self.consumer_thread.is_alive() and not self.stop_node.is_set():
+            if not self.consumer_thread.is_alive() and self.recording_active.is_set():
                 self.throttle_timer = self.create_timer(1.0/(self._fps * 2), self._throttle_timer_callback)
                 self.consumer_thread.start()
 
@@ -180,7 +180,7 @@ class InCarVideoEditNode(Node):
 
         except DoubleBuffer.Empty:
             self.get_logger().info("Input buffer is empty. Stopping.")
-            self.stop_node.set()
+            self.recording_active.clear()
             return
 
     def _consumer_mp4_frame_thread(self):
@@ -191,7 +191,7 @@ class InCarVideoEditNode(Node):
         mp4_queue_published = 0
         bridge = CvBridge()
 
-        while rclpy.ok() and not self.stop_node.is_set():
+        while rclpy.ok() and self.recording_active.is_set():
             frame_data = None
             try:
                 # Pop from the queue and edit the image
