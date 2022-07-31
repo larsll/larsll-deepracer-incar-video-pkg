@@ -209,7 +209,7 @@ class InCarVideoEditNode(Node):
                         self.camera_pub.publish(edited_frame)
 
                     edited_frame_count += 1
-                    self.get_logger().info("Published {} frame to video stream. {} frames in queue.".format(edited_frame_count, self._edit_queue.qsize()))
+                    self.get_logger().info("Published {} frames. {} frames in queue.".format(edited_frame_count, self._edit_queue.qsize()))
                 
             except queue.Empty:
                 self.get_logger().debug("Frame buffer is empty")
