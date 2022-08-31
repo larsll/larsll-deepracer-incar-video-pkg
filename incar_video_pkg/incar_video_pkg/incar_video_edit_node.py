@@ -15,8 +15,9 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as ROSImg
+from sensor_msgs.msg import CompressedImage as ROSCImg
 
-from incar_video_pkg.constants import (PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
+from incar_video_pkg.constants import (PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
                                   Mp4Parameter, MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV)
 
 from incar_video_pkg.image_editing import ImageEditing
@@ -109,6 +110,11 @@ class InCarVideoEditNode(Node):
                                     PUBLISH_VIDEO_TOPIC,
                                     250,
                                     callback_group=self.camera_cbg)
+            self.camera_cpub = self.create_publisher(ROSCImg,
+                                    PUBLISH_COMPRESSED_VIDEO_TOPIC,
+                                    250,
+                                    callback_group=self.camera_cbg)
+
 
         # Saving to MP4
         if self._save_to_mp4:
@@ -126,21 +132,6 @@ class InCarVideoEditNode(Node):
         self.consumer_thread.join()
         self.get_logger().info('Done.')
         
-    def _edit_main_camera_image(self, frame_data):
-        """ Thread to edit main camera frames
-
-        Args:
-            frame_data (EvoSensorMsg): Dictionary of frame, agent_metric_info, training_phase
-            edited_frame_result (dict): A mutable variable holding the dict result of edited frame
-        """
-        main_frame = frame_data.images[0]
-        major_cv_image = self.bridge.imgmsg_to_cv2(main_frame, "bgr8")
-        major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
-        # Edit the image based on the racecar type and job type
-
-        major_cv_image = self.job_type_image_edit_mp4.edit_image(major_cv_image, frame_data.imu_data)
-
-        return self.bridge.cv2_to_imgmsg(major_cv_image, "bgr8")
 
     def _producer_frame_callback(self, frame):
         """ Callback for the main input. Once a new image is received, all the required
@@ -198,14 +189,19 @@ class InCarVideoEditNode(Node):
                 frame_data = self._frame_queue.get(block=True, timeout=QUEUE_WAIT_TIME)
 
                 if frame_data:
-                    edited_frame = self._edit_main_camera_image(frame_data)
+                    main_frame = frame_data.images[0]
+                    major_cv_image = self.bridge.compressed_imgmsg_to_cv2(main_frame)
+                    major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
+                    edited_frame = self.job_type_image_edit_mp4.edit_image(major_cv_image, frame_data.imu_data)
                     
                     if self._save_to_mp4:
-                        cv_image = bridge.imgmsg_to_cv2(edited_frame, "bgr8")
-                        self.cv2_video_writer.write(cv_image)
+                        self.cv2_video_writer.write(edited_frame)
 
                     if self._publish_to_topic:
-                        self.camera_pub.publish(edited_frame)
+                        self.camera_pub.publish(self.bridge.cv2_to_imgmsg(edited_frame, "bgr8"))
+                        c_msg = self.bridge.cv2_to_compressed_imgmsg(edited_frame)
+                        c_msg.format = "bgr8; jpeg compressed bgr8"
+                        self.camera_cpub.publish(c_msg)
 
                     mp4_queue_published += 1
                     LOG.info("Published {} frame to MP4 queue. {} frames in queue.".format(mp4_queue_published, self._frame_queue.qsize()))

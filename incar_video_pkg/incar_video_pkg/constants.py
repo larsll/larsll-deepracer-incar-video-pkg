@@ -6,7 +6,8 @@ MAIN_CAMERA_TOPIC="/camera_pkg/display_mjpeg"
 VIDEO_STATE_SRV="/camera_pkg/media_state"
 IMU_TOPIC="/imu_pkg/imu_raw"
 PUBLISH_SENSOR_TOPIC="/sensor_fusion_pkg/sensor_msg"
-PUBLISH_VIDEO_TOPIC="/video/mp4_stream"
+PUBLISH_VIDEO_TOPIC="display_stream"
+PUBLISH_COMPRESSED_VIDEO_TOPIC="display_stream/compressed"
 
 class Mp4Parameter(Enum):
     """
