@@ -94,4 +94,4 @@ class XYPixelLoc(Enum):
 # Agent Video editor constants
 MAX_FRAMES_IN_QUEUE = 2700
 KVS_PUBLISH_PERIOD = 1.0/15.0
-QUEUE_WAIT_TIME = 10 # In seconds
+QUEUE_WAIT_TIME = 1 # In seconds

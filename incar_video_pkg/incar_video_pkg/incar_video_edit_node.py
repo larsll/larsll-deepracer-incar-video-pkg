@@ -29,23 +29,18 @@ from deepracer_interfaces_pkg.srv import VideoStateSrv
 from incar_video_pkg import utils
 from incar_video_pkg.utils import DoubleBuffer
 
-LOG = Logger(__name__, logging.INFO).get_logger()
-
 
 class InCarVideoEditNode(Node):
     """ This node is used to produce frames for the AWS kinesis video stream and
     for saving the mp4 and uploading to S3. Both are subscribed to the output of
     the image topic produced by this node.
     """
-    _agents_metrics = list()
-    _frame_queue = list()
+    _edit_queue = list()
 
     def __init__(self):
         super().__init__('incar_video_edit_node')
 
-        self.stop_node = Event()
-
-        self._agents_metrics.append(DoubleBuffer(clear_data_on_get=False))
+        self.recording_active = Event()
 
         self.declare_parameter('racecar_name', 'DeepRacer', ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
         self.declare_parameter('publish_stream', False, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
@@ -74,18 +69,17 @@ class InCarVideoEditNode(Node):
         self.job_type_image_edit_mp4 = ImageEditing(self._racecar_name)
 
         # All Mp4 related initialization
-        self._frame_queue = queue.Queue()
-        self._mp4_queue_pushed = 0
+        self._edit_queue = queue.Queue()
         self._edit_queue_pushed = 0
         self._last_image_seen = 0
 
 
     def __enter__(self):
-        self._main_camera_frame_buffer = DoubleBuffer(clear_data_on_get=True)
+        self._camera_input_buffer = DoubleBuffer(clear_data_on_get=True)
         self.camera_sub_cbg = ReentrantCallbackGroup()
         self.camera_sub = self.create_subscription(EvoSensorMsg,
                                  PUBLISH_SENSOR_TOPIC,
-                                 self._producer_frame_callback,
+                                 self._receive_camera_frame_callback,
                                  5,
                                  callback_group=self.camera_sub_cbg)
 
@@ -98,10 +92,10 @@ class InCarVideoEditNode(Node):
         req = VideoStateSrv.Request()
         req.activate_video = 1
         _ = self.cli.call_async(req)
+        self.recording_active.set()
 
         # self.subscribe_to_save_mp4()
-        self.consumer_thread = Thread(target=self._consumer_mp4_frame_thread)
-        self.consumer_thread.start()
+        self.edit_frame_thread = Thread(target=self._edit_frame_thread)
 
         # Publisher to broadcast the edited video stream.
         if self._publish_to_topic:
@@ -120,20 +114,18 @@ class InCarVideoEditNode(Node):
         if self._save_to_mp4:
             self.cv2_video_writer = cv2.VideoWriter(self._output_file_name, Mp4Parameter.FOURCC.value, self._fps, Mp4Parameter.FRAME_SIZE.value)
 
-        self.throttle_timer = self.create_timer(1.0/(self._fps * 2), self._throttle_timer_callback)
-
         return self
 
     def __exit__(self, ExcType, ExcValue, Traceback):
         """Called when the object is destroyed.
         """
         self.get_logger().info('Stopping.')
-        self.stop_node.set()
-        self.consumer_thread.join()
+        self.recording_active.clear()
+        self.edit_frame_thread.join()
         self.get_logger().info('Done.')
         
 
-    def _producer_frame_callback(self, frame):
+    def _receive_camera_frame_callback(self, frame):
         """ Callback for the main input. Once a new image is received, all the required
         service calls are made to get the video metric information. Then for Mp4 its put into the queue
         but for the KVS its put into a double since we only care for the latest image for KVS
@@ -143,50 +135,59 @@ class InCarVideoEditNode(Node):
         """
         if rclpy.ok():
             self._edit_queue_pushed += 1
-            LOG.debug("Pushed {} frames to Frame Buffer.".format(self._edit_queue_pushed ))
+            self.get_logger().debug("Pushed {} frames to Frame Buffer.".format(self._edit_queue_pushed ))
 
-            self._main_camera_frame_buffer.put(frame)
+            self._camera_input_buffer.put(frame)
 
+            # On first receive start thread and timer
+            if not self.edit_frame_thread.is_alive() and self.recording_active.is_set():
+                self.buffer_timer = self.create_timer(1.0/(2 * self._fps), self._buffer_timer_callback)
+                self.edit_frame_thread.start()
 
-    def _throttle_timer_callback(self):
-
+    def _buffer_timer_callback(self):
+        """ Callback for the buffer timer. It reads the current picture from the _camera_input_buffer,
+            and places it into the edit frame queue. It will report on errors if frames are dropped.
+            It will also terminate video editing if no frames are received.
+        """
         try:
-            frame = self._main_camera_frame_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
+            frame = self._camera_input_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
 
-            if self._frame_queue.qsize() == MAX_FRAMES_IN_QUEUE:
-                LOG.info("Dropping Mp4 frame from the queue")
-                self._frame_queue.get()
+            if self._edit_queue.qsize() == MAX_FRAMES_IN_QUEUE:
+                self.get_logger().info("Dropping Mp4 frame from the queue")
+                self._edit_queue.get()
                                   
             new_image_seen = int(frame.images[0].header.frame_id)
 
             if (new_image_seen - self._last_image_seen > 1):
-                LOG.warn(f"Image gap: { new_image_seen } of {new_image_seen - self._last_image_seen}")
+                self.get_logger().warn(f"Image gap: { new_image_seen } of {new_image_seen - self._last_image_seen}")
 
             self._last_image_seen = new_image_seen
 
             # Append to the MP4 queue
-            self._frame_queue.put(frame)
-            self._mp4_queue_pushed += 1
+            self._edit_queue.put(frame)
+            self._edit_queue_pushed += 1
 
-            LOG.debug("Pushed {} frames to Edit Queue.".format(self._mp4_queue_pushed))
+            self.get_logger().debug("Pushed {} frames to Edit Queue.".format(self._edit_queue_pushed))
 
-        except queue.Empty:
-            LOG.info("Input buffer is empty. Stopping")
+        except DoubleBuffer.Empty:
+            self.get_logger().info("Input buffer is empty for {} seconds. Stopping.".format(QUEUE_WAIT_TIME))
+            self.destroy_timer(self.buffer_timer)            
+            self.recording_active.clear()
             return
 
-    def _consumer_mp4_frame_thread(self):
-        """ Consumes the frame produced by the _producer_frame_thread and edits the image
-        The edited image is put into another queue for publishing to MP4 topic
+    def _edit_frame_thread(self):
+        """ Consumes the frame queued by the _buffer_timer_callback and edits the image
+        The edited image is published or written to MP4 file.
         """
 
-        mp4_queue_published = 0
+        edited_frame_count = 0
         bridge = CvBridge()
 
-        while rclpy.ok() and not self.stop_node.is_set():
+        while rclpy.ok() and self.recording_active.is_set():
             frame_data = None
             try:
                 # Pop from the queue and edit the image
-                frame_data = self._frame_queue.get(block=True, timeout=QUEUE_WAIT_TIME)
+                frame_data = self._edit_queue.get(block=False)
 
                 if frame_data:
                     main_frame = frame_data.images[0]
@@ -203,21 +204,19 @@ class InCarVideoEditNode(Node):
                         c_msg.format = "bgr8; jpeg compressed bgr8"
                         self.camera_cpub.publish(c_msg)
 
-                    mp4_queue_published += 1
-                    LOG.info("Published {} frame to MP4 queue. {} frames in queue.".format(mp4_queue_published, self._frame_queue.qsize()))
+                    edited_frame_count += 1
+                    self.get_logger().info("Published {} frames. {} frames in queue.".format(edited_frame_count, self._edit_queue.qsize()))
                 
             except queue.Empty:
-                LOG.info("Frame buffer is empty. Stopping.")
-                self.stop_node.set()
+                self.get_logger().debug("Frame buffer is empty")
+
 
         if self._save_to_mp4:
             self.cv2_video_writer.release()
+            self.get_logger().info("Video written to {}.".format(self._output_file_name))
 
         if self._publish_to_topic:
             self.destroy_publisher(self.camera_pub)
-
-        self.destroy_timer(self.throttle_timer)
-        self.destroy_subscription(self.camera_sub)
 
 def main(args=None):
 
@@ -232,6 +231,8 @@ def main(args=None):
         incar_video_edit_node.destroy_node()
     except KeyboardInterrupt:
         pass
+    except:
+        logging.exception("Error in Node")
 
     rclpy.shutdown()
 
