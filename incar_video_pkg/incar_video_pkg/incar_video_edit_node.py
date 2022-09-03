@@ -6,7 +6,6 @@ from threading import Thread, Event
 import queue
 import cv2
 import rclpy
-from rclpy.time import Time
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -17,11 +16,13 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as ROSImg
 from sensor_msgs.msg import CompressedImage as ROSCImg
 
-from incar_video_pkg.constants import (PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
+from incar_video_pkg.constants import (PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC, STATUS_TOPIC,
                                   Mp4Parameter, MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV)
 
 from incar_video_pkg.image_editing import ImageEditing
 from incar_video_pkg.logger import Logger
+
+from incar_video_interfaces_pkg.msg import StatusMsg
 
 from deepracer_interfaces_pkg.msg import EvoSensorMsg
 from deepracer_interfaces_pkg.srv import VideoStateSrv
@@ -47,18 +48,20 @@ class InCarVideoEditNode(Node):
         self.declare_parameter('save_to_mp4', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
         self.declare_parameter('output_file_name', 'deepracer-{}.mp4', ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
         self.declare_parameter('fps', Mp4Parameter.FPS.value, ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER))
+        self.declare_parameter('publish_status', True, ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
 
         self._racecar_name = self.get_parameter('racecar_name').value
         self._publish_to_topic = self.get_parameter('publish_stream').value
         self._save_to_mp4 = self.get_parameter('save_to_mp4').value
         self._output_file_name = self.get_parameter('output_file_name').value
         self._fps = self.get_parameter('fps').value
+        self._publish_status = self.get_parameter('publish_status').value
 
         if "{}" in self._output_file_name:
             self._output_file_name = self._output_file_name.format(time.strftime("%Y%m%d-%H%M%S"))
 
         # init cv bridge
-        self.bridge = CvBridge()
+        self._bridge = CvBridge()
 
         # Two job types are required because in the F1 editing we have static variables
         # to compute the gap and ranking. With Mp4 stacking frames, these values would be already updated by KVS.
@@ -76,12 +79,12 @@ class InCarVideoEditNode(Node):
 
     def __enter__(self):
         self._camera_input_buffer = DoubleBuffer(clear_data_on_get=True)
-        self.camera_sub_cbg = ReentrantCallbackGroup()
-        self.camera_sub = self.create_subscription(EvoSensorMsg,
+        self._camera_sub_cbg = ReentrantCallbackGroup()
+        self._camera_sub = self.create_subscription(EvoSensorMsg,
                                  PUBLISH_SENSOR_TOPIC,
                                  self._receive_camera_frame_callback,
                                  5,
-                                 callback_group=self.camera_sub_cbg)
+                                 callback_group=self._camera_sub_cbg)
 
         # Call ROS service to enable the Video Stream
         self.cli = self.create_client(VideoStateSrv, VIDEO_STATE_SRV)
@@ -99,16 +102,24 @@ class InCarVideoEditNode(Node):
 
         # Publisher to broadcast the edited video stream.
         if self._publish_to_topic:
-            self.camera_cbg = ReentrantCallbackGroup()
-            self.camera_pub = self.create_publisher(ROSImg,
+            self._camera_cbg = ReentrantCallbackGroup()
+            self._camera_pub = self.create_publisher(ROSImg,
                                     PUBLISH_VIDEO_TOPIC,
                                     250,
-                                    callback_group=self.camera_cbg)
-            self.camera_cpub = self.create_publisher(ROSCImg,
+                                    callback_group=self._camera_cbg)
+            self._camera_cpub = self.create_publisher(ROSCImg,
                                     PUBLISH_COMPRESSED_VIDEO_TOPIC,
                                     250,
-                                    callback_group=self.camera_cbg)
+                                    callback_group=self._camera_cbg)
 
+
+        # Publisher for status messages
+        if self._publish_status:
+            self._status_cbg = ReentrantCallbackGroup()
+            self._status_pub = self.create_publisher(StatusMsg,
+                                    STATUS_TOPIC,
+                                    1,
+                                    callback_group=self._status_cbg)            
 
         # Saving to MP4
         if self._save_to_mp4:
@@ -181,7 +192,6 @@ class InCarVideoEditNode(Node):
         """
 
         edited_frame_count = 0
-        bridge = CvBridge()
 
         while rclpy.ok() and self.recording_active.is_set():
             frame_data = None
@@ -191,7 +201,7 @@ class InCarVideoEditNode(Node):
 
                 if frame_data:
                     main_frame = frame_data.images[0]
-                    major_cv_image = self.bridge.compressed_imgmsg_to_cv2(main_frame)
+                    major_cv_image = self._bridge.compressed_imgmsg_to_cv2(main_frame)
                     major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
                     edited_frame = self.job_type_image_edit_mp4.edit_image(major_cv_image, frame_data.imu_data)
                     
@@ -199,13 +209,20 @@ class InCarVideoEditNode(Node):
                         self.cv2_video_writer.write(edited_frame)
 
                     if self._publish_to_topic:
-                        self.camera_pub.publish(self.bridge.cv2_to_imgmsg(edited_frame, "bgr8"))
-                        c_msg = self.bridge.cv2_to_compressed_imgmsg(edited_frame)
+                        self._camera_pub.publish(self._bridge.cv2_to_imgmsg(edited_frame, "bgr8"))
+                        c_msg = self._bridge.cv2_to_compressed_imgmsg(edited_frame)
                         c_msg.format = "bgr8; jpeg compressed bgr8"
-                        self.camera_cpub.publish(c_msg)
+                        self._camera_cpub.publish(c_msg)
 
                     edited_frame_count += 1
-                    self.get_logger().info("Published {} frames. {} frames in queue.".format(edited_frame_count, self._edit_queue.qsize()))
+                    self.get_logger().debug("Published {} frames. {} frames in queue.".format(edited_frame_count, self._edit_queue.qsize()))
+
+                    if self._publish_status:
+                        status = StatusMsg()
+                        status.state = 1
+                        status.published = edited_frame_count
+                        status.queue = self._edit_queue.qsize()
+                        self._status_pub.publish(status)
                 
             except queue.Empty:
                 self.get_logger().debug("Frame buffer is empty")
@@ -216,7 +233,7 @@ class InCarVideoEditNode(Node):
             self.get_logger().info("Video written to {}.".format(self._output_file_name))
 
         if self._publish_to_topic:
-            self.destroy_publisher(self.camera_pub)
+            self.destroy_publisher(self._camera_pub)
 
 def main(args=None):
 

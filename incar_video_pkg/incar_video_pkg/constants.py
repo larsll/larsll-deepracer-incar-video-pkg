@@ -8,6 +8,7 @@ IMU_TOPIC="/imu_pkg/imu_raw"
 PUBLISH_SENSOR_TOPIC="/sensor_fusion_pkg/sensor_msg"
 PUBLISH_VIDEO_TOPIC="display_stream"
 PUBLISH_COMPRESSED_VIDEO_TOPIC="display_stream/compressed"
+STATUS_TOPIC="status"
 
 class Mp4Parameter(Enum):
     """
