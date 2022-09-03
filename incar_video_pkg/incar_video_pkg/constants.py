@@ -9,6 +9,7 @@ PUBLISH_SENSOR_TOPIC="/sensor_fusion_pkg/sensor_msg"
 PUBLISH_VIDEO_TOPIC="display_stream"
 PUBLISH_COMPRESSED_VIDEO_TOPIC="display_stream/compressed"
 STATUS_TOPIC="status"
+RECORDING_STATE_SERVICE_NAME="recording_state"
 
 class Mp4Parameter(Enum):
     """
@@ -34,6 +35,14 @@ class ColorMap(Enum):
     White = (255, 255, 255)
     Purple = (159, 42, 195)
 
+class RecordingState(Enum):
+    """ Color to RGB mapping
+    Extends:
+        Enum
+    """
+    Stopped = 0
+    Running = 1
+    Stopping = 2
 
 # Amount of time (in seconds) to wait, in order to prevent model state from
 # spamming logs while the model is loading

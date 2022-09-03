@@ -4,7 +4,7 @@
   <name>incar_video_interfaces_pkg</name>
   <version>0.0.1</version>
   <description>Interfaces needed to manage the incar_video_pkg</description>
-  <maintainer email="larsll@outlook.com">ludvigse</maintainer>
+  <maintainer email="lars@ludvig.no">Lars Ludvigsen</maintainer>
   <license>Apache 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
