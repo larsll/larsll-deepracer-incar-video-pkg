@@ -48,7 +48,6 @@ setup(
     entry_points={
         "console_scripts": [
             "incar_video_edit_node = incar_video_pkg.incar_video_edit_node:main",
-            "incar_video_capture_node = incar_video_pkg.incar_video_capture_node:main",
         ],
     },
 )

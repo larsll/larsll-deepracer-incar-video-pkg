@@ -23,7 +23,7 @@ def generate_launch_description():
         Node(
             package='incar_video_pkg',
             namespace='incar_video_pkg',
-            executable='incar_video_node',
-            name='incar_video_node'
+            executable='incar_video_edit_node',
+            name='incar_video_edit_node'
         )
     ])
