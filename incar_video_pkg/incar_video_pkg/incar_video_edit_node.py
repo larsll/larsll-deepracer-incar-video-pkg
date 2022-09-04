@@ -5,6 +5,8 @@ import time
 from threading import Thread
 import queue
 import cv2
+from cv_bridge import CvBridge
+
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -12,24 +14,21 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
-from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as ROSImg
 from sensor_msgs.msg import CompressedImage as ROSCImg
+
+from deepracer_interfaces_pkg.msg import EvoSensorMsg
+from deepracer_interfaces_pkg.srv import VideoStateSrv
 
 from incar_video_pkg.constants import (
     PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
     RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC, Mp4Parameter,
     MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV, RecordingState)
-
 from incar_video_pkg.image_editing import ImageEditing
+from incar_video_pkg.utils import DoubleBuffer
 
 from incar_video_interfaces_pkg.msg import StatusMsg
 from incar_video_interfaces_pkg.srv import RecordStateSrv
-
-from deepracer_interfaces_pkg.msg import EvoSensorMsg
-from deepracer_interfaces_pkg.srv import VideoStateSrv
-
-from incar_video_pkg.utils import DoubleBuffer
 
 
 class InCarVideoEditNode(Node):
@@ -111,6 +110,8 @@ class InCarVideoEditNode(Node):
             self._status_cbg = ReentrantCallbackGroup()
             self._status_pub = self.create_publisher(
                 StatusMsg, STATUS_TOPIC, 1, callback_group=self._status_cbg)
+            self.status_timer = self.create_timer(1,
+                                                  self._status_timer_callback)
 
         # Service to start and stop recording
         self._state_service_cbg = ReentrantCallbackGroup()
@@ -193,24 +194,40 @@ class InCarVideoEditNode(Node):
         if self._rec_state == RecordingState.Running and req.state == 0:
             self._stop_recording()
             res.error = 0
+            res.desc = "OK"
 
         elif (self._rec_state == RecordingState.Running) and (req.state == 1):
             res.error = 1
+            res.desc = "Recording is already running"
 
         elif self._rec_state == RecordingState.Stopping and req.state == 1:
             res.error = 1
+            res.desc = "Recording is stopping"
 
         elif self._rec_state == RecordingState.Stopping and req.state == 0:
             res.error = 1
+            res.desc = "Recording is stopping"
 
         elif self._rec_state == RecordingState.Stopped and req.state == 0:
             res.error = 0
+            res.desc = "Recording already stopped"
 
         elif self._rec_state == RecordingState.Stopped and req.state == 1:
             self._start_recording()
             res.error = 0
+            res.desc = "OK"
 
         return res
+
+    def _status_timer_callback(self):
+        """Callback that sends out the status message for any node monitoring
+        """
+        if self._publish_status:
+            self._status_pub.publish(
+                StatusMsg(
+                    state=self._rec_state.value,
+                    published=self._edited_frame_count,
+                    queue=self._edit_queue.qsize()))
 
     def _receive_camera_frame_callback(self, frame):
         """ Callback for the main input. Once a new image is received, all the
@@ -308,12 +325,6 @@ class InCarVideoEditNode(Node):
                         "Published {} frames. {} frames in queue.".format(
                             self._edited_frame_count,
                             self._edit_queue.qsize()))
-
-                    if self._publish_status:
-                        self._status_pub.publish(
-                            StatusMsg(
-                                state=1, published=self._edited_frame_count,
-                                queue=self._edit_queue.qsize()))
 
             except queue.Empty:
                 self.get_logger().debug("Frame buffer is empty")

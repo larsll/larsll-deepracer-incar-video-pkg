@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 import cv2
 
 MAIN_CAMERA_TOPIC = "/camera_pkg/display_mjpeg"
@@ -36,7 +36,7 @@ class ColorMap(Enum):
     Purple = (159, 42, 195)
 
 
-class RecordingState(Enum):
+class RecordingState(IntEnum):
     """ Color to RGB mapping
     Extends:
         Enum
