@@ -90,8 +90,8 @@ class InCarVideoEditNode(Node):
         while not self._camera_state_cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().info('Camera service not available, waiting...')
 
-        self.get_logger().info("Camera service available, enabling video \
-                                stream.")
+        self.get_logger().info("Camera service available, enabling video"
+                               " stream.")
         _ = self._camera_state_cli.call_async(
             VideoStateSrv.Request(activate_video=1))
 
@@ -333,8 +333,8 @@ class InCarVideoEditNode(Node):
                     self._edit_queue.qsize() == 0):
                 self._rec_state = RecordingState.Stopped
                 self.get_logger().info(
-                    "Stopped recording after publishing {} frames. \
-                        Queue empty.".
+                    "Stopped recording after publishing {} frames. "
+                    "Queue empty.".
                     format(self._edited_frame_count))
 
         if self._save_to_mp4:
