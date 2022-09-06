@@ -10,13 +10,14 @@
   <license>Apache 2.0</license>
 
   <depend>rclpy</depend>
+  <depend>cv_bridge</depend>
+  <depend>BMI160_i2c</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
-  <depend>camera_pkg</depend>
+  <depend>sensor_fusion_pkg</depend>
+  <depend>incar_video_interfaces_pkg</depend>
   <depend>imu_pkg</depend>
-  <depend>cv_bridge</depend>
-  <depend>BMI160_i2c</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
