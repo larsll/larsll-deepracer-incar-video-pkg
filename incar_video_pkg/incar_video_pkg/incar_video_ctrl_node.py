@@ -79,8 +79,7 @@ class InCarVideoCtrlNode(Node):
     def __exit__(self, ExcType, ExcValue, Traceback):
         """Called when the object is destroyed.
         """
-        self.get_logger().info('Stopping the node due to {}.'
-                               .format(ExcType.__name__))
+        self.get_logger().info('Stopping the node due to {}.'.format(ExcType.__name__))
 
         try:
             self._shutdown.set()
@@ -95,8 +94,7 @@ class InCarVideoCtrlNode(Node):
         """Receives the status updates from the edit node
         """
         self._edit_node_status = msg
-        self.get_logger().debug("Received message from edit node."
-                                " ({} | {} | {})"
+        self.get_logger().debug("Received message from edit node. ({} | {} | {})"
                                 .format(msg.state, msg.published, msg.queue))
 
     def _serial_receive_cb(self):
@@ -113,22 +111,18 @@ class InCarVideoCtrlNode(Node):
                     if serial_in_str != '':
                         try:
                             new_cmd = int(serial_in_str)
-                            self.get_logger() \
-                                .debug("Serial input {} as int {}"
-                                       .format(serial_in_b, new_cmd))
+                            self.get_logger().debug("Serial input {} as int {}"
+                                                    .format(serial_in_b, new_cmd))
 
                             if new_cmd != self._edit_node_status.state:
-                                self._target_edit_state = \
-                                    RecordingState(new_cmd)
+                                self._target_edit_state = RecordingState(new_cmd)
                                 self._change_state.set()
 
                         except ValueError:
-                            self.get_logger() \
-                                .warn("Serial input {} not int"
-                                      .format(serial_in_b))
+                            self.get_logger().warn("Serial input {} not int"
+                                                   .format(serial_in_b))
                     else:
-                        self.get_logger() \
-                            .debug("Serial read timeout. No data.")
+                        self.get_logger().debug("Serial read timeout. No data.")
         except SerialException:
             self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
         except:  # noqa E722
@@ -142,15 +136,13 @@ class InCarVideoCtrlNode(Node):
             try:
                 if self._change_state.wait(timeout=1.0):
                     self.get_logger().info("Changing state to {}"
-                                           .format(self._target_edit_state
-                                                   .name))
+                                           .format(self._target_edit_state.name))
                     resp = self._state_service_cli.call(
                         RecordStateSrv.Request(
                             state=self._target_edit_state.value))
                     self._change_state.clear()
             except:  # noqa E722
-                self.get_logger().error("{} occurred."
-                                        .format(sys.exc_info()[0]))
+                self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
 
 
 def main(args=None):
