@@ -68,7 +68,7 @@ class InCarVideoEditNode(Node):
 
         # Init cv bridge and Image Edit code
         self._bridge = CvBridge()
-        self.job_type_image_edit_mp4 = ImageEditing(self._racecar_name)
+        self._image_editor = ImageEditing(self._racecar_name)
 
         # All Mp4 related initialization
         self._edit_queue = queue.Queue()
@@ -141,6 +141,7 @@ class InCarVideoEditNode(Node):
         self._edited_frame_count = 0
         self._edit_queue = queue.Queue()
         self._last_image_seen = 0
+        self._image_editor.start_time = 0  # Restart timer
 
         # Saving to MP4
         if self._save_to_mp4:
@@ -283,7 +284,7 @@ class InCarVideoEditNode(Node):
                     main_frame = frame_data.images[0]
                     major_cv_image = self._bridge.compressed_imgmsg_to_cv2(main_frame)
                     major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
-                    edited_frame = self.job_type_image_edit_mp4.edit_image(major_cv_image, frame_data.imu_data)
+                    edited_frame = self._image_editor.edit_image(major_cv_image, frame_data.imu_data)
 
                     if self._save_to_mp4:
                         self.cv2_video_writer.write(edited_frame)
