@@ -38,7 +38,7 @@ setup(
         (os.path.join("share", package_name, "AmazonEmber"), ["resource/AmazonEmber/AmazonEmber_ThIt.ttf"]),
         (os.path.join("share", package_name, "images"), ["resource/images/DRL_video_oa_overlay_league_leaderboard.png"])
     ],
-    install_requires=["setuptools","pillow"],
+    install_requires=["setuptools","pillow","pyserial"],
     zip_safe=True,
     maintainer="Lars Ludvigsen",
     maintainer_email="lars@ludvig.no",
