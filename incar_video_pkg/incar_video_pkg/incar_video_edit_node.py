@@ -142,10 +142,6 @@ class InCarVideoEditNode(Node):
         self._edit_queue = queue.Queue()
         self._last_image_seen = 0
 
-        self._rec_state = RecordingState.Running
-        self.edit_frame_thread = Thread(target=self._edit_frame_thread)
-        self.edit_frame_thread.start()
-
         # Saving to MP4
         if self._save_to_mp4:
             if "{}" in self._output_file_name:
@@ -159,6 +155,10 @@ class InCarVideoEditNode(Node):
             self.get_logger().info('Starting recording to {}.'.format(self._output_file_name_current))
         else:
             self.get_logger().info('Starting recording.')
+
+        self._rec_state = RecordingState.Running
+        self.edit_frame_thread = Thread(target=self._edit_frame_thread)
+        self.edit_frame_thread.start()
 
     def _stop_recording(self):
         """ Method that is used to stop the recording.
