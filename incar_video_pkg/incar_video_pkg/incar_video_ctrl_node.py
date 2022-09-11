@@ -108,13 +108,13 @@ class InCarVideoCtrlNode(Node):
                                 .format(msg.state, msg.published, msg.queue))
 
         if (self._update_led):
-            color = LedColorMap.Black
+            color = LedColorMap.Black.value
             if self._edit_node_status.state == RecordingState.Running:
-                color = LedColorMap.Green
+                color = LedColorMap.Green.value
             elif self._edit_node_status.state == RecordingState.Stopping:
-                color = LedColorMap.Orange
+                color = LedColorMap.Orange.value
             else:
-                color = LedColorMap.Red
+                color = LedColorMap.Red.value
 
             led_msg = SetLedCtrlSrv.Request(red=color[0], green=color[1], blue=color[2])
             _ = self._setledstate_service_cli.call(led_msg)
