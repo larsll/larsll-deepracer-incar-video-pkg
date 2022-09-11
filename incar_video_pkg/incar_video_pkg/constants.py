@@ -1,6 +1,7 @@
 from enum import Enum, IntEnum
 import cv2
 
+# Topics / Services
 MAIN_CAMERA_TOPIC = "/camera_pkg/display_mjpeg"
 VIDEO_STATE_SRV = "/camera_pkg/media_state"
 IMU_TOPIC = "/imu_pkg/imu_raw"
@@ -9,6 +10,15 @@ PUBLISH_VIDEO_TOPIC = "display_stream"
 PUBLISH_COMPRESSED_VIDEO_TOPIC = "display_stream/compressed"
 STATUS_TOPIC = "status"
 RECORDING_STATE_SERVICE_NAME = "recording_state"
+LED_SET_SERVICE_NAME = "/servo_pkg/set_led_state"
+
+# Agent Video editor constants
+MAX_FRAMES_IN_QUEUE = 2700
+KVS_PUBLISH_PERIOD = 1.0/15.0
+QUEUE_WAIT_TIME = 1  # In seconds
+
+# LED MAX - a bit less than 24 bits
+LED_MAX_VALUE = 10000000
 
 
 class Mp4Parameter(Enum):
@@ -34,6 +44,16 @@ class ColorMap(Enum):
     Orange = (255, 160, 10)
     White = (255, 255, 255)
     Purple = (159, 42, 195)
+
+
+class LedColorMap(Enum):
+    Black = (0, 0, 0)
+    Blue = (0, 0, LED_MAX_VALUE)
+    Green = (0, LED_MAX_VALUE, 0)
+    Red = (LED_MAX_VALUE, 0, 0)
+    Orange = (LED_MAX_VALUE, int(0.5*LED_MAX_VALUE), 0)
+    White = (LED_MAX_VALUE, LED_MAX_VALUE, LED_MAX_VALUE)
+    Purple = (int(0.73 * LED_MAX_VALUE), int(0.2 * LED_MAX_VALUE), LED_MAX_VALUE)
 
 
 class RecordingState(IntEnum):
@@ -96,8 +116,3 @@ class XYPixelLoc(Enum):
     TRACK_IMG_WITH_OFFSET_LOC = (0, 20)
     TRACK_IMG_WITHOUT_OFFSET_LOC = (0, 0)
 
-
-# Agent Video editor constants
-MAX_FRAMES_IN_QUEUE = 2700
-KVS_PUBLISH_PERIOD = 1.0/15.0
-QUEUE_WAIT_TIME = 1  # In seconds

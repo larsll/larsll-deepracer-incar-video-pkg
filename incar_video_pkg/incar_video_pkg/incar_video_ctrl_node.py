@@ -13,11 +13,11 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
-from deepracer_interfaces_pkg.srv import VideoStateSrv
+from deepracer_interfaces_pkg.srv import VideoStateSrv, SetLedCtrlSrv
 
 from incar_video_pkg.constants import (
-    RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
-    MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV, RecordingState)
+    LED_SET_SERVICE_NAME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
+    MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV, LedColorMap, RecordingState)
 from incar_video_pkg.utils import DoubleBuffer
 
 from incar_video_interfaces_pkg.msg import StatusMsg
@@ -43,6 +43,12 @@ class InCarVideoCtrlNode(Node):
 
         self._serial_port = self.get_parameter('serial_port').value
 
+        self.declare_parameter(
+            'update_led', True,
+            ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
+
+        self._update_led = self.get_parameter('update_led').value
+
     def __enter__(self):
         self._edit_node_sub_cbg = ReentrantCallbackGroup()
         self._edit_node_sub = self.create_subscription(
@@ -63,6 +69,10 @@ class InCarVideoCtrlNode(Node):
         # Service client to start and stop recording
         self._state_service_cli = self.create_client(
             RecordStateSrv, RECORDING_STATE_SERVICE_NAME)
+
+        # Service client to change LED state
+        self._setledstate_service_cli = self.create_client(
+            SetLedCtrlSrv, LED_SET_SERVICE_NAME)
 
         # Serial receiver thread
         self._serial_receive_thread = Thread(target=self._serial_receive_cb)
@@ -96,6 +106,18 @@ class InCarVideoCtrlNode(Node):
         self._edit_node_status = msg
         self.get_logger().debug("Received message from edit node. ({} | {} | {})"
                                 .format(msg.state, msg.published, msg.queue))
+
+        if (self._update_led):
+            color = LedColorMap.Black
+            if self._edit_node_status.state == RecordingState.Running:
+                color = LedColorMap.Green
+            elif self._edit_node_status.state == RecordingState.Stopping:
+                color = LedColorMap.Orange
+            else:
+                color = LedColorMap.Red
+
+            led_msg = SetLedCtrlSrv.Request(red=color[0], green=color[1], blue=color[2])
+            _ = self._setledstate_service_cli.call(led_msg)
 
     def _serial_receive_cb(self):
         """Permanent method that will receive commands via serial
