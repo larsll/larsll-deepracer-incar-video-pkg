@@ -33,6 +33,7 @@ class InCarVideoCtrlNode(Node):
     _change_state = Event()
     _edit_node_status = StatusMsg()
     _target_edit_state = RecordingState.Stopped
+    _current_led_color = LedColorMap.Black.value
 
     def __init__(self):
         super().__init__('incar_video_ctrl_node')
@@ -116,8 +117,10 @@ class InCarVideoCtrlNode(Node):
             else:
                 color = LedColorMap.Red.value
 
-            led_msg = SetLedCtrlSrv.Request(red=color[0], green=color[1], blue=color[2])
-            _ = self._setledstate_service_cli.call(led_msg)
+            if (self._current_led_color != color):
+                led_msg = SetLedCtrlSrv.Request(red=color[0], green=color[1], blue=color[2])
+                _ = self._setledstate_service_cli.call(led_msg)
+                self._current_led_color = color
 
     def _serial_receive_cb(self):
         """Permanent method that will receive commands via serial
