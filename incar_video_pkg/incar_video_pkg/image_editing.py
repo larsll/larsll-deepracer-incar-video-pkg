@@ -3,11 +3,14 @@ there is only single agent
 """
 import datetime
 import logging
+import math
 import cv2
 
 from rclpy.time import Time
 
 from sensor_msgs.msg import Imu
+from geometry_msgs.msg import Quaternion
+from tf_transformations import euler_from_quaternion
 
 from incar_video_pkg.logger import Logger
 
@@ -76,10 +79,18 @@ class ImageEditing(ImageEditingInterface):
             font_shadow_color=ColorMap.Black.value)
 
         # Gyro label
-        loc_x, loc_y = XYPixelLoc.ANGULAR_LBL_LOC.value
-        gyro_lbl_text = "Gyro | rad/s "
+        # loc_x, loc_y = XYPixelLoc.ANGULAR_LBL_LOC.value
+        # gyro_lbl_text = "Gyro | rad/s "
+        # self.gradient_img = utils.write_text_on_image(
+        #    image=self.gradient_img, text=gyro_lbl_text, loc=(loc_x, loc_y),
+        #    font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+        #    font_shadow_color=ColorMap.Black.value)
+
+        # YPR label
+        loc_x, loc_y = XYPixelLoc.YPR_LBL_LOC.value
+        ypr_lbl_text = "Pose | deg "
         self.gradient_img = utils.write_text_on_image(
-            image=self.gradient_img, text=gyro_lbl_text, loc=(loc_x, loc_y),
+            image=self.gradient_img, text=ypr_lbl_text, loc=(loc_x, loc_y),
             font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
             font_shadow_color=ColorMap.Black.value)
 
@@ -143,27 +154,53 @@ class ImageEditing(ImageEditingInterface):
             font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
             font_shadow_color=ColorMap.Black.value, anchor="ra")
 
+        orientation: Quaternion = imu_info.orientation
+        euler_orientation = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w],
+                                                  axes='rzyx')
+
+        # Yaw-Pitch-Roll
+        loc_x, loc_y = XYPixelLoc.YPR_Y_LOC.value
+        ypr_y_text = "{:+.0f}".format(euler_orientation[0] * 180 / math.pi).rjust(4)
+        major_cv_image = utils.write_text_on_image(
+            image=major_cv_image, text=ypr_y_text, loc=(loc_x, loc_y),
+            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+            font_shadow_color=ColorMap.Black.value, anchor="ra")
+
+        loc_x, loc_y = XYPixelLoc.YPR_P_LOC.value
+        ypr_p_text = "{:+.0f}".format(euler_orientation[1] * 180 / math.pi).rjust(4)
+        major_cv_image = utils.write_text_on_image(
+            image=major_cv_image, text=ypr_p_text, loc=(loc_x, loc_y),
+            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+            font_shadow_color=ColorMap.Black.value, anchor="ra")
+
+        loc_x, loc_y = XYPixelLoc.YPR_R_LOC.value
+        ypr_r_text = "{:+.0f}".format(euler_orientation[2] * 180 / math.pi).rjust(4)
+        major_cv_image = utils.write_text_on_image(
+            image=major_cv_image, text=ypr_r_text, loc=(loc_x, loc_y),
+            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+            font_shadow_color=ColorMap.Black.value, anchor="ra")
+
         # Gyro
-        loc_x, loc_y = XYPixelLoc.ANGULAR_X_LOC.value
-        angular_x_text = "{:+.1f}".format(imu_info.angular_velocity.x)
-        major_cv_image = utils.write_text_on_image(
-            image=major_cv_image, text=angular_x_text, loc=(loc_x, loc_y),
-            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
-            font_shadow_color=ColorMap.Black.value, anchor="ra")
+        # loc_x, loc_y = XYPixelLoc.ANGULAR_X_LOC.value
+        # angular_x_text = "{:+.1f}".format(imu_info.angular_velocity.x)
+        # major_cv_image = utils.write_text_on_image(
+        #    image=major_cv_image, text=angular_x_text, loc=(loc_x, loc_y),
+        #    font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+        #    font_shadow_color=ColorMap.Black.value, anchor="ra")
 
-        loc_x, loc_y = XYPixelLoc.ANGULAR_Y_LOC.value
-        angular_y_text = "{:+.1f}".format(imu_info.angular_velocity.y)
-        major_cv_image = utils.write_text_on_image(
-            image=major_cv_image, text=angular_y_text, loc=(loc_x, loc_y),
-            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
-            font_shadow_color=ColorMap.Black.value, anchor="ra")
+        # loc_x, loc_y = XYPixelLoc.ANGULAR_Y_LOC.value
+        # angular_y_text = "{:+.1f}".format(imu_info.angular_velocity.y)
+        # major_cv_image = utils.write_text_on_image(
+        #    image=major_cv_image, text=angular_y_text, loc=(loc_x, loc_y),
+        #    font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+        #    font_shadow_color=ColorMap.Black.value, anchor="ra")
 
-        loc_x, loc_y = XYPixelLoc.ANGULAR_Z_LOC.value
-        angular_z_text = "{:+.1f}".format(imu_info.angular_velocity.z)
-        major_cv_image = utils.write_text_on_image(
-            image=major_cv_image, text=angular_z_text, loc=(loc_x, loc_y),
-            font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
-            font_shadow_color=ColorMap.Black.value, anchor="ra")
+        # loc_x, loc_y = XYPixelLoc.ANGULAR_Z_LOC.value
+        # angular_z_text = "{:+.1f}".format(imu_info.angular_velocity.z)
+        # major_cv_image = utils.write_text_on_image(
+        #    image=major_cv_image, text=angular_z_text, loc=(loc_x, loc_y),
+        #    font=self.amazon_ember_light_16px, font_color=ColorMap.White.value,
+        #    font_shadow_color=ColorMap.Black.value, anchor="ra")
 
         major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2BGRA)
         return major_cv_image
