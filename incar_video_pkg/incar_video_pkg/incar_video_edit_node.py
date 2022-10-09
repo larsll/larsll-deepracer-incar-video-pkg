@@ -58,6 +58,8 @@ class InCarVideoEditNode(Node):
             ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER))
         self.declare_parameter('publish_status', True, ParameterDescriptor(
             type=ParameterType.PARAMETER_BOOL))
+        self.declare_parameter('enable_overlay', True, ParameterDescriptor(
+            type=ParameterType.PARAMETER_BOOL))
 
         self._racecar_name = self.get_parameter('racecar_name').value
         self._publish_to_topic = self.get_parameter('publish_stream').value
@@ -65,6 +67,7 @@ class InCarVideoEditNode(Node):
         self._output_file_name = self.get_parameter('output_file_name').value
         self._fps = self.get_parameter('fps').value
         self._publish_status = self.get_parameter('publish_status').value
+        self._enable_overlay = self.get_parameter('enable_overlay').value
 
         # Init cv bridge and Image Edit code
         self._bridge = CvBridge()
@@ -283,8 +286,12 @@ class InCarVideoEditNode(Node):
                 if frame_data:
                     main_frame = frame_data.images[0]
                     major_cv_image = self._bridge.compressed_imgmsg_to_cv2(main_frame)
-                    major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
-                    edited_frame = self._image_editor.edit_image(major_cv_image, frame_data.imu_data)
+
+                    if self._enable_overlay:
+                        major_cv_image = cv2.cvtColor(major_cv_image, cv2.COLOR_RGB2RGBA)
+                        edited_frame = self._image_editor.edit_image(major_cv_image, frame_data.imu_data)
+                    else:
+                        edited_frame = major_cv_image
 
                     if self._save_to_mp4:
                         self.cv2_video_writer.write(edited_frame)
