@@ -24,7 +24,7 @@ from incar_video_interfaces_pkg.srv import RecordStateSrv
 
 
 class InCarVideoAutoCtrlNode(Node):
-    """ This node is used to enable/disable the recording based on input 
+    """ This node is used to enable/disable the recording based on input
     from a ROS topic.
     """
     _shutdown = Event()
@@ -152,7 +152,7 @@ class InCarVideoAutoCtrlNode(Node):
             while not self._shutdown.is_set():
                 self._check_rate.sleep()
                 dur_since_last_message = self.get_clock().now() - self._monitor_last_received
-                
+
                 if (dur_since_last_message > timeout_duration) and \
                         self._edit_node_status.state == RecordingState.Running and \
                         self._target_edit_state == RecordingState.Running:
