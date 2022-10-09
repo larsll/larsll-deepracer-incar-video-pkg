@@ -1,30 +1,31 @@
 #!/usr/bin/env python3
 
 import logging
-from serial import Serial, SerialException
+import importlib
 import sys
 from threading import Thread, Event
 
 import rclpy
 from rclpy.node import Node
+from rclpy.time import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
-from deepracer_interfaces_pkg.srv import VideoStateSrv, SetLedCtrlSrv
+from deepracer_interfaces_pkg.srv import SetLedCtrlSrv
 
 from incar_video_pkg.constants import (
     LED_SET_SERVICE_NAME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
-    VIDEO_STATE_SRV, LedColorMap, RecordingState)
+    LedColorMap, RecordingState)
 
 from incar_video_interfaces_pkg.msg import StatusMsg
 from incar_video_interfaces_pkg.srv import RecordStateSrv
 
 
-class InCarVideoSerialCtrlNode(Node):
+class InCarVideoAutoCtrlNode(Node):
     """ This node is used to enable/disable the recording based on input 
-    from a serial port.
+    from a ROS topic.
     """
     _shutdown = Event()
     _change_state = Event()
@@ -33,18 +34,30 @@ class InCarVideoSerialCtrlNode(Node):
     _current_led_color = LedColorMap.Black.value
 
     def __init__(self):
-        super().__init__('incar_video_serial_ctrl_node')
+        super().__init__('incar_video_auto_ctrl_node')
 
         self.declare_parameter(
-            'serial_port', '/dev/ttyS0',
+            'monitor_topic', '/inference_pkg/rl_results',
             ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
-
-        self._serial_port = self.get_parameter('serial_port').value
+        self._monitor_topic = self.get_parameter('monitor_topic').value
 
         self.declare_parameter(
-            'update_led', True,
-            ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
+            'monitor_topic_type', 'deepracer_interfaces_pkg.msg.InferResultsArray',
+            ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
+        topic_type = self.get_parameter('monitor_topic_type').value
+        module_name, class_name = topic_type.rsplit(".", 1)
+        type_module = importlib.import_module(module_name)
+        self._monitor_topic_type = getattr(type_module, class_name)
 
+        self.declare_parameter(
+            'monitor_topic_timeout', 1,
+            ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER))
+        self._monitor_topic_timeout = self.get_parameter('monitor_topic_timeout').value
+        self._monitor_last_received = self.get_clock().now()
+
+        self.declare_parameter(
+            'update_led', False,
+            ParameterDescriptor(type=ParameterType.PARAMETER_BOOL))
         self._update_led = self.get_parameter('update_led').value
 
     def __enter__(self):
@@ -55,16 +68,11 @@ class InCarVideoSerialCtrlNode(Node):
             StatusMsg, STATUS_TOPIC, self._receive_status_callback, 1,
             callback_group=self._edit_node_sub_cbg)
 
-        # Call ROS service to enable the Video Stream
-        self._camera_state_cli = self.create_client(
-            VideoStateSrv, VIDEO_STATE_SRV)
-        while not self._camera_state_cli.wait_for_service(timeout_sec=5.0):
-            self.get_logger().info('Camera service not available, waiting...')
-
-        self.get_logger().info("Camera service available, enabling video" +
-                               "stream.")
-        _ = self._camera_state_cli.call_async(
-            VideoStateSrv.Request(activate_video=1))
+        # Subscription to monitor topic.
+        self._monitor_node_sub_cbg = ReentrantCallbackGroup()
+        self._monitor_node_sub = self.create_subscription(
+            self._monitor_topic_type, self._monitor_topic, self._receive_monitor_callback, 1,
+            callback_group=self._monitor_node_sub_cbg)
 
         # Service client to start and stop recording
         self._state_service_cli = self.create_client(
@@ -74,9 +82,9 @@ class InCarVideoSerialCtrlNode(Node):
         self._setledstate_service_cli = self.create_client(
             SetLedCtrlSrv, LED_SET_SERVICE_NAME)
 
-        # Serial receiver thread
-        self._serial_receive_thread = Thread(target=self._serial_receive_cb)
-        self._serial_receive_thread.start()
+        # Check if timeout receiver thread
+        self._timeout_check_thread = Thread(target=self._timeout_check_thread_cb)
+        self._timeout_check_thread.start()
 
         # Change thread
         self._change_thread = Thread(target=self._change_cb)
@@ -93,7 +101,8 @@ class InCarVideoSerialCtrlNode(Node):
 
         try:
             self._shutdown.set()
-            self._serial_receive_thread.join()
+            self._check_rate.destroy()
+            self._timeout_check_thread.join()
             self._change_thread.join()
         except:  # noqa E722
             self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
@@ -121,36 +130,38 @@ class InCarVideoSerialCtrlNode(Node):
                 _ = self._setledstate_service_cli.call(led_msg)
                 self._current_led_color = color
 
-    def _serial_receive_cb(self):
+    def _receive_monitor_callback(self, msg):
         """Permanent method that will receive commands via serial
         """
         try:
-            with Serial(
-                    port=self._serial_port,
-                    baudrate=9600,
-                    timeout=1) as serial:
-                while serial.is_open and not self._shutdown.isSet():
-                    serial_in_b = serial.readline()
-                    serial_in_str = str(serial_in_b, encoding="ascii")[:1]
-                    if serial_in_str != '':
-                        try:
-                            new_cmd = int(serial_in_str)
-                            self.get_logger().debug("Serial input {} as int {}"
-                                                    .format(serial_in_b, new_cmd))
+            self._monitor_last_received = self.get_clock().now()
+            if self._edit_node_status.state == RecordingState.Stopped and \
+                    self._target_edit_state == RecordingState.Stopped:
+                self._target_edit_state = RecordingState.Running
+                self._change_state.set()
+                self.get_logger().info("Got callback from {}. Triggering start.". format(self._monitor_topic))
 
-                            if new_cmd != self._edit_node_status.state:
-                                self._target_edit_state = RecordingState(new_cmd)
-                                self._change_state.set()
-
-                        except ValueError:
-                            self.get_logger().warn("Serial input {} not int"
-                                                   .format(serial_in_b))
-                    else:
-                        self.get_logger().debug("Serial read timeout. No data.")
-        except SerialException:
-            self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
         except:  # noqa E722
-            self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
+            self.get_logger().error("{} occurred in _receive_monitor_callback.".format(sys.exc_info()[0]))
+
+    def _timeout_check_thread_cb(self):
+        try:
+            self._check_rate = self.create_rate(5.0 / self._monitor_topic_timeout)
+            timeout_duration = Duration(seconds=self._monitor_topic_timeout)
+
+            while not self._shutdown.is_set():
+                self._check_rate.sleep()
+                dur_since_last_message = self.get_clock().now() - self._monitor_last_received
+                
+                if (dur_since_last_message > timeout_duration) and \
+                        self._edit_node_status.state == RecordingState.Running and \
+                        self._target_edit_state == RecordingState.Running:
+                    self._target_edit_state = RecordingState.Stopped
+                    self._change_state.set()
+                    self.get_logger().info("Timeout. Triggering stop of recording.". format(self._monitor_topic))
+
+        except:  # noqa E722
+            self.get_logger().error("{} occurred in _timeout_check_thread_cb.".format(sys.exc_info()[0]))
 
     def _change_cb(self):
         """Permanent method that will monitor for change events
@@ -173,13 +184,13 @@ def main(args=None):
 
     try:
         rclpy.init(args=args)
-        with InCarVideoSerialCtrlNode() as incar_video_serial_ctrl_node:
+        with InCarVideoAutoCtrlNode() as incar_video_auto_ctrl_node:
             executor = MultiThreadedExecutor()
-            rclpy.spin(incar_video_serial_ctrl_node, executor)
+            rclpy.spin(incar_video_auto_ctrl_node, executor)
         # Destroy the node explicitly
         # (optional - otherwise it will be done automatically
         # when the garbage collector destroys the node object)
-        incar_video_serial_ctrl_node.destroy_node()
+        incar_video_auto_ctrl_node.destroy_node()
     except KeyboardInterrupt:
         pass
     except:  # noqa: E722
