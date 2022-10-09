@@ -38,17 +38,17 @@ setup(
         (os.path.join("share", package_name, "AmazonEmber"), ["resource/AmazonEmber/AmazonEmber_ThIt.ttf"]),
         (os.path.join("share", package_name, "images"), ["resource/images/DRL_video_oa_overlay_league_leaderboard.png"])
     ],
-    install_requires=["setuptools","pillow","pyserial"],
+    install_requires=["setuptools", "pillow", "pyserial"],
     zip_safe=True,
     maintainer="Lars Ludvigsen",
     maintainer_email="lars@ludvig.no",
-    description="This package contains a video editing node that adds additional information to the in-car video stream.",
+    description="This package contains a video editing node adding information to the in-car video stream.",
     license="Apache 2.0",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "incar_video_edit_node = incar_video_pkg.incar_video_edit_node:main",
-            "incar_video_ctrl_node = incar_video_pkg.incar_video_ctrl_node:main",
+            "incar_video_serial_ctrl_node = incar_video_pkg.incar_video_serial_ctrl_node:main",
         ],
     },
 )

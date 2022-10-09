@@ -24,7 +24,7 @@ from incar_video_interfaces_pkg.msg import StatusMsg
 from incar_video_interfaces_pkg.srv import RecordStateSrv
 
 
-class InCarVideoCtrlNode(Node):
+class InCarVideoSerialCtrlNode(Node):
     """ This node is used to produce frames for the AWS kinesis video stream
     and for saving the mp4 and uploading to S3. Both are subscribed to the
     output of the image topic produced by this node.
@@ -174,13 +174,13 @@ def main(args=None):
 
     try:
         rclpy.init(args=args)
-        with InCarVideoCtrlNode() as incar_video_ctrl_node:
+        with InCarVideoSerialCtrlNode() as incar_video_serial_ctrl_node:
             executor = MultiThreadedExecutor()
-            rclpy.spin(incar_video_ctrl_node, executor)
+            rclpy.spin(incar_video_serial_ctrl_node, executor)
         # Destroy the node explicitly
         # (optional - otherwise it will be done automatically
         # when the garbage collector destroys the node object)
-        incar_video_ctrl_node.destroy_node()
+        incar_video_serial_ctrl_node.destroy_node()
     except KeyboardInterrupt:
         pass
     except:  # noqa: E722
