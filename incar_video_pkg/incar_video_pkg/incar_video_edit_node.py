@@ -9,6 +9,7 @@ from cv_bridge import CvBridge
 
 import rclpy
 from rclpy.node import Node
+from rclpy.time import Time, Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 
@@ -76,15 +77,17 @@ class InCarVideoEditNode(Node):
         # All Mp4 related initialization
         self._edit_queue = queue.Queue()
         self._edit_queue_pushed = 0
+        self._frame_buffer_pushed = 0
         self._last_image_seen = 0
         self._edited_frame_count = 0
 
     def __enter__(self):
+
+        self._main_cbg = ReentrantCallbackGroup()
         self._camera_input_buffer = DoubleBuffer(clear_data_on_get=True)
-        self._camera_sub_cbg = ReentrantCallbackGroup()
         self._camera_sub = self.create_subscription(
             EvoSensorMsg, PUBLISH_SENSOR_TOPIC, self._receive_camera_frame_callback, 5,
-            callback_group=self._camera_sub_cbg)
+            callback_group=self._main_cbg)
 
         # Call ROS service to enable the Video Stream
         self._camera_state_cli = self.create_client(VideoStateSrv, VIDEO_STATE_SRV)
@@ -97,29 +100,27 @@ class InCarVideoEditNode(Node):
 
         # Publisher to broadcast the edited video stream.
         if self._publish_to_topic:
-            self._camera_cbg = ReentrantCallbackGroup()
             self._camera_pub = self.create_publisher(ROSImg, PUBLISH_VIDEO_TOPIC, 250,
-                                                     callback_group=self._camera_cbg)
+                                                     callback_group=self._main_cbg)
             self._camera_cpub = self.create_publisher(ROSCImg, PUBLISH_COMPRESSED_VIDEO_TOPIC, 250,
-                                                      callback_group=self._camera_cbg)
+                                                      callback_group=self._main_cbg)
 
         # Publisher for status messages
         if self._publish_status:
-            self._status_cbg = ReentrantCallbackGroup()
-            self._status_pub = self.create_publisher(StatusMsg, STATUS_TOPIC, 1, callback_group=self._status_cbg)
-            self.status_timer = self.create_timer(1, self._status_timer_callback)
+            self._status_pub = self.create_publisher(StatusMsg, STATUS_TOPIC, 1, callback_group=self._main_cbg)
+            self.status_timer = self.create_timer(1, self._status_timer_callback, callback_group=self._main_cbg)
 
         # Service to start and stop recording
-        self._state_service_cbg = ReentrantCallbackGroup()
         self._state_service = self.create_service(
             RecordStateSrv, RECORDING_STATE_SERVICE_NAME, self._state_service_callback,
-            callback_group=self._state_service_cbg)
+            callback_group=self._main_cbg)
 
         # Preparing the Edit Frame Thread pointer
         self.edit_frame_thread = None
 
         # Prepare timer
-        self.buffer_timer = self.create_timer(1.0/(2 * self._fps), self._buffer_timer_callback)
+        self._buffer_timer = self.create_timer(1.0/(2 * self._fps), self._buffer_timer_callback,
+                                               callback_group=self._main_cbg)
 
         self.get_logger().info('Node started. Ready to start recording.')
 
@@ -132,7 +133,7 @@ class InCarVideoEditNode(Node):
                                .format(ExcType.__name__))
         if self._rec_state != RecordingState.Stopped:
             self._rec_state = RecordingState.Stopped
-            self.destroy_timer(self.buffer_timer)
+            self.destroy_timer(self._buffer_timer)
             if (self.edit_frame_thread is not None):
                 self.edit_frame_thread.join()
 
@@ -229,10 +230,9 @@ class InCarVideoEditNode(Node):
             frame (cv2.ImgMsg): Image/Sensor topic of the camera image frame
         """
         if rclpy.ok():
-            self._edit_queue_pushed += 1
-            self.get_logger().debug("Pushed {} frames to Frame Buffer.".format(self._edit_queue_pushed))
-
+            self._frame_buffer_pushed += 1
             self._camera_input_buffer.put(frame)
+            self.get_logger().debug("Pushed {} frames to frame buffer.".format(self._frame_buffer_pushed))
 
     def _buffer_timer_callback(self):
         """ Callback for the buffer timer. It reads the current picture from
@@ -243,7 +243,7 @@ class InCarVideoEditNode(Node):
         try:
 
             if self._rec_state == RecordingState.Running:
-                frame = self._camera_input_buffer.get(block=True, timeout=QUEUE_WAIT_TIME)
+                frame = self._camera_input_buffer.get(block=False)
 
                 if self._edit_queue.qsize() == MAX_FRAMES_IN_QUEUE:
                     self.get_logger().info("Dropping Mp4 frame from the queue")
@@ -257,19 +257,22 @@ class InCarVideoEditNode(Node):
                         f"Image gap: Frame { new_image_seen }, missing {new_image_seen - self._last_image_seen}")
 
                 self._last_image_seen = new_image_seen
+                self._last_image_seen_time = self.get_clock().now()
 
                 # Append to the MP4 queue
                 self._edit_queue.put(frame)
                 self._edit_queue_pushed += 1
 
                 self.get_logger().debug(
-                    "Pushed {} frames to Edit Queue.".format(self._edit_queue_pushed))
+                    "Pushed {} frames to edit queue.".format(self._edit_queue_pushed))
 
         except DoubleBuffer.Empty:
             if self._rec_state == RecordingState.Running:
-                self.get_logger().info("Input buffer is empty for {} seconds. Stopping.".format(QUEUE_WAIT_TIME))
-                self.buffer_timer.cancel()
-                self._rec_state = RecordingState.Stopping
+                delta_time: Duration = self.get_clock().now() - self._last_image_seen_time
+                if (delta_time.nanoseconds > (QUEUE_WAIT_TIME * 1e9)):
+                    self.get_logger().info("Input buffer is empty for {} seconds. Stopping.".format(QUEUE_WAIT_TIME))
+                    self._buffer_timer.cancel()
+                    self._rec_state = RecordingState.Stopping
             return
 
     def _edit_frame_thread(self):

@@ -16,6 +16,7 @@ LED_SET_SERVICE_NAME = "/servo_pkg/set_led_state"
 MAX_FRAMES_IN_QUEUE = 2700
 KVS_PUBLISH_PERIOD = 1.0/15.0
 QUEUE_WAIT_TIME = 1  # In seconds
+MONITOR_CHECK_TIME = 0.05
 
 # LED MAX - a bit less than 24 bits
 LED_MAX_VALUE = 10000000
@@ -27,7 +28,7 @@ class Mp4Parameter(Enum):
     Extends:
         Enum
     """
-    FOURCC = cv2.VideoWriter_fourcc(*'H264')
+    FOURCC = cv2.VideoWriter_fourcc(*'avc1')
     FPS = 15
     FRAME_SIZE = (640, 480)
 
