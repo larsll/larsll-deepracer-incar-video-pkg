@@ -110,7 +110,7 @@ class InCarVideoSerialCtrlNode(Node):
         """Receives the status updates from the edit node
         """
 
-        if(self._edit_node_status.state == RecordingState.Running and
+        if (self._edit_node_status.state == RecordingState.Running and
             self._target_edit_state == RecordingState.Running and
             (msg.state == RecordingState.Stopping or
              msg.state == RecordingState.Stopped)):

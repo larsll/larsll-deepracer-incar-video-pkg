@@ -16,7 +16,7 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from deepracer_interfaces_pkg.srv import SetLedCtrlSrv
 
 from incar_video_pkg.constants import (
-    LED_SET_SERVICE_NAME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
+    LED_SET_SERVICE_NAME, MONITOR_CHECK_TIME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
     LedColorMap, RecordingState)
 
 from incar_video_interfaces_pkg.msg import StatusMsg
@@ -63,15 +63,15 @@ class InCarVideoAutoCtrlNode(Node):
     def __enter__(self):
 
         # Subscription to receive status update from edit node.
-        self._edit_node_sub_cbg = ReentrantCallbackGroup()
+        self._main_cbg = ReentrantCallbackGroup()
         self._edit_node_sub = self.create_subscription(
             StatusMsg, STATUS_TOPIC, self._receive_status_callback, 1,
-            callback_group=self._edit_node_sub_cbg)
+            callback_group=self._main_cbg)
 
         # Subscription to monitor topic.
         self._monitor_node_sub_cbg = ReentrantCallbackGroup()
         self._monitor_node_sub = self.create_subscription(
-            self._monitor_topic_type, self._monitor_topic, self._receive_monitor_callback, 1,
+            self._monitor_topic_type, self._monitor_topic, self._main_cbg, 1,
             callback_group=self._monitor_node_sub_cbg)
 
         # Service client to start and stop recording
@@ -86,9 +86,9 @@ class InCarVideoAutoCtrlNode(Node):
         self._timeout_check_thread = Thread(target=self._timeout_check_thread_cb)
         self._timeout_check_thread.start()
 
-        # Change thread
-        self._change_thread = Thread(target=self._change_cb)
-        self._change_thread.start()
+        # Change monitor
+        self._change_timer = self.create_timer(MONITOR_CHECK_TIME, callback=self._change_monitor_cb,
+                                               callback_group=self._main_cbg)
 
         self.get_logger().info('Node started. Ready to control.')
 
@@ -112,9 +112,17 @@ class InCarVideoAutoCtrlNode(Node):
     def _receive_status_callback(self, msg):
         """Receives the status updates from the edit node
         """
+        if (self._edit_node_status.state == RecordingState.Running and
+            self._target_edit_state == RecordingState.Running and
+            (msg.state == RecordingState.Stopping or
+             msg.state == RecordingState.Stopped)):
+            self.get_logger().warn("Received inconsistent state from edit node. ({} | {} | {})"
+                                   .format(msg.state, msg.published, msg.queue))
+            self._target_edit_state = RecordingState.Stopped
+        else:
+            self.get_logger().debug("Received state from edit node. ({} | {} | {})"
+                                    .format(msg.state, msg.published, msg.queue))
         self._edit_node_status = msg
-        self.get_logger().debug("Received message from edit node. ({} | {} | {})"
-                                .format(msg.state, msg.published, msg.queue))
 
         if (self._update_led):
             color = LedColorMap.Black.value
@@ -127,7 +135,7 @@ class InCarVideoAutoCtrlNode(Node):
 
             if (self._current_led_color != color):
                 led_msg = SetLedCtrlSrv.Request(red=color[0], green=color[1], blue=color[2])
-                _ = self._setledstate_service_cli.call(led_msg)
+                _ = self._setledstate_service_cli.call_async(led_msg)
                 self._current_led_color = color
 
     def _receive_monitor_callback(self, msg):
@@ -163,16 +171,15 @@ class InCarVideoAutoCtrlNode(Node):
         except:  # noqa E722
             self.get_logger().error("{} occurred in _timeout_check_thread_cb.".format(sys.exc_info()[0]))
 
-    def _change_cb(self):
+    def _change_monitor_cb(self):
         """Permanent method that will monitor for change events
         """
-
-        while not self._shutdown.is_set():
+        if not self._shutdown.is_set():
             try:
-                if self._change_state.wait(timeout=1.0):
+                if self._change_state.is_set():
                     self.get_logger().info("Changing state to {}"
                                            .format(self._target_edit_state.name))
-                    resp = self._state_service_cli.call(
+                    resp = self._state_service_cli.call_async(
                         RecordStateSrv.Request(
                             state=self._target_edit_state.value))
                     self._change_state.clear()
