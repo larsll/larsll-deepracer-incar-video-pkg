@@ -42,12 +42,12 @@ class InCarVideoAutoCtrlNode(Node):
         self._monitor_topic = self.get_parameter('monitor_topic').value
 
         self.declare_parameter(
-            'monitor_topic_type', 'deepracer_interfaces_pkg.msg.InferResultsArray',
+            'monitor_topic_type', 'deepracer_interfaces_pkg/msg/InferResultsArray',
             ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
-        topic_type = self.get_parameter('monitor_topic_type').value
-        module_name, class_name = topic_type.rsplit(".", 1)
+        self._monitor_topic_type = self.get_parameter('monitor_topic_type').value
+        module_name, class_name = self._monitor_topic_type.replace('/', '.').rsplit(".", 1)
         type_module = importlib.import_module(module_name)
-        self._monitor_topic_type = getattr(type_module, class_name)
+        self._monitor_topic_class = getattr(type_module, class_name)
 
         self.declare_parameter(
             'monitor_topic_timeout', 1,
@@ -69,10 +69,9 @@ class InCarVideoAutoCtrlNode(Node):
             callback_group=self._main_cbg)
 
         # Subscription to monitor topic.
-        self._monitor_node_sub_cbg = ReentrantCallbackGroup()
         self._monitor_node_sub = self.create_subscription(
-            self._monitor_topic_type, self._monitor_topic, self._main_cbg, 1,
-            callback_group=self._monitor_node_sub_cbg)
+            self._monitor_topic_class, self._monitor_topic, self._receive_monitor_callback, 1,
+            callback_group=self._main_cbg)
 
         # Service client to start and stop recording
         self._state_service_cli = self.create_client(
