@@ -102,8 +102,8 @@ class InCarVideoAutoCtrlNode(Node):
         try:
             self._shutdown.set()
             self._check_rate.destroy()
+            self._change_timer.destroy()
             self._timeout_check_thread.join()
-            self._change_thread.join()
         except:  # noqa E722
             self.get_logger().error("{} occurred.".format(sys.exc_info()[0]))
         finally:
