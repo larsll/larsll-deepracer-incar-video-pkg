@@ -35,6 +35,7 @@ endif()
 
 set(msg_files
   "msg/StatusMsg.msg"
+  "msg/EvoSensorMsg.msg"
 )
 set(srv_files
   "srv/RecordStateSrv.srv"

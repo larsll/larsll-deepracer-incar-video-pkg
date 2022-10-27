@@ -47,7 +47,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "incar_video_edit_node = incar_video_pkg.incar_video_edit_node:main",
+            "incar_video_exec = incar_video_pkg.incar_video_edit_node:main",
             "incar_video_serial_ctrl_node = incar_video_pkg.incar_video_serial_ctrl_node:main",
             "incar_video_auto_ctrl_node = incar_video_pkg.incar_video_auto_ctrl_node:main",
         ],

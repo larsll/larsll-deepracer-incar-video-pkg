@@ -15,8 +15,8 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from deepracer_interfaces_pkg.srv import VideoStateSrv, SetLedCtrlSrv
 
 from incar_video_pkg.constants import (
-    LED_SET_SERVICE_NAME, MONITOR_CHECK_TIME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
-    VIDEO_STATE_SRV, LedColorMap, RecordingState)
+    LED_STATE_SRV, MONITOR_CHECK_TIME, RECORDING_STATE_SRV, PUBSUB_STATUS_TOPIC,
+    CAMERA_STATE_SRV, LedColorMap, RecordingState)
 
 from incar_video_interfaces_pkg.msg import StatusMsg
 from incar_video_interfaces_pkg.srv import RecordStateSrv
@@ -52,12 +52,12 @@ class InCarVideoSerialCtrlNode(Node):
         # Subscription to receive status update from edit node.
         self._main_cbg = ReentrantCallbackGroup()
         self._edit_node_sub = self.create_subscription(
-            StatusMsg, STATUS_TOPIC, self._receive_status_callback, 1,
+            StatusMsg, PUBSUB_STATUS_TOPIC, self._receive_status_callback, 1,
             callback_group=self._main_cbg)
 
         # Call ROS service to enable the Video Stream
         self._camera_state_cli = self.create_client(
-            VideoStateSrv, VIDEO_STATE_SRV)
+            VideoStateSrv, CAMERA_STATE_SRV)
         while not self._camera_state_cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().info('Camera service not available, waiting...')
 
@@ -68,11 +68,11 @@ class InCarVideoSerialCtrlNode(Node):
 
         # Service client to start and stop recording
         self._state_service_cli = self.create_client(
-            RecordStateSrv, RECORDING_STATE_SERVICE_NAME)
+            RecordStateSrv, RECORDING_STATE_SRV)
 
         # Service client to change LED state
         self._setledstate_service_cli = self.create_client(
-            SetLedCtrlSrv, LED_SET_SERVICE_NAME, callback_group=self._main_cbg)
+            SetLedCtrlSrv, LED_STATE_SRV, callback_group=self._main_cbg)
 
         # Serial receiver timer
         self._serial_receive_timer = self.create_timer(MONITOR_CHECK_TIME, callback=self._serial_receive_cb,

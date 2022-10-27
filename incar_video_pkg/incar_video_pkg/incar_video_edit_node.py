@@ -18,17 +18,15 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from sensor_msgs.msg import Image as ROSImg
 from sensor_msgs.msg import CompressedImage as ROSCImg
 
-from deepracer_interfaces_pkg.msg import EvoSensorMsg
-from deepracer_interfaces_pkg.srv import VideoStateSrv
-
+from incar_video_pkg.incar_video_sensor_fusion_node import InCarVideoSensorFusionNode
 from incar_video_pkg.constants import (
-    PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBLISH_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
-    RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC, Mp4Parameter,
-    MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, VIDEO_STATE_SRV, RecordingState)
+    PUBLISH_COMPRESSED_VIDEO_TOPIC, PUBSUB_SENSOR_TOPIC, PUBLISH_VIDEO_TOPIC,
+    RECORDING_STATE_SRV, PUBSUB_STATUS_TOPIC, Mp4Parameter,
+    MAX_FRAMES_IN_QUEUE, QUEUE_WAIT_TIME, RecordingState)
 from incar_video_pkg.image_editing import ImageEditing
 from incar_video_pkg.utils import DoubleBuffer
 
-from incar_video_interfaces_pkg.msg import StatusMsg
+from incar_video_interfaces_pkg.msg import StatusMsg, EvoSensorMsg
 from incar_video_interfaces_pkg.srv import RecordStateSrv
 
 
@@ -39,8 +37,8 @@ class InCarVideoEditNode(Node):
     """
     _edit_queue = list()
 
-    def __init__(self):
-        super().__init__('incar_video_edit_node')
+    def __init__(self, node_name):
+        super().__init__(node_name)
 
         self._rec_state = RecordingState.Stopped
 
@@ -80,23 +78,15 @@ class InCarVideoEditNode(Node):
         self._frame_buffer_pushed = 0
         self._last_image_seen = 0
         self._edited_frame_count = 0
+        self._last_image_seen_time = self.get_clock().now()
 
     def __enter__(self):
 
         self._main_cbg = ReentrantCallbackGroup()
         self._camera_input_buffer = DoubleBuffer(clear_data_on_get=True)
         self._camera_sub = self.create_subscription(
-            EvoSensorMsg, PUBLISH_SENSOR_TOPIC, self._receive_camera_frame_callback, 5,
+            EvoSensorMsg, PUBSUB_SENSOR_TOPIC, self._receive_camera_frame_callback, 5,
             callback_group=self._main_cbg)
-
-        # Call ROS service to enable the Video Stream
-        self._camera_state_cli = self.create_client(VideoStateSrv, VIDEO_STATE_SRV)
-        while not self._camera_state_cli.wait_for_service(timeout_sec=5.0):
-            self.get_logger().info('Camera service not available, waiting...')
-
-        self.get_logger().info("Camera service available, enabling video"
-                               " stream.")
-        _ = self._camera_state_cli.call_async(VideoStateSrv.Request(activate_video=1))
 
         # Publisher to broadcast the edited video stream.
         if self._publish_to_topic:
@@ -107,12 +97,12 @@ class InCarVideoEditNode(Node):
 
         # Publisher for status messages
         if self._publish_status:
-            self._status_pub = self.create_publisher(StatusMsg, STATUS_TOPIC, 1, callback_group=self._main_cbg)
+            self._status_pub = self.create_publisher(StatusMsg, PUBSUB_STATUS_TOPIC, 1, callback_group=self._main_cbg)
             self.status_timer = self.create_timer(1, self._status_timer_callback, callback_group=self._main_cbg)
 
         # Service to start and stop recording
         self._state_service = self.create_service(
-            RecordStateSrv, RECORDING_STATE_SERVICE_NAME, self._state_service_callback,
+            RecordStateSrv, RECORDING_STATE_SRV, self._state_service_callback,
             callback_group=self._main_cbg)
 
         # Preparing the Edit Frame Thread pointer
@@ -327,13 +317,19 @@ def main(args=None):
 
     try:
         rclpy.init(args=args)
-        with InCarVideoEditNode() as incar_video_edit_node:
-            executor = MultiThreadedExecutor()
-            rclpy.spin(incar_video_edit_node, executor)
+
+        with InCarVideoEditNode('incar_video_edit_node') as incar_video_edit_node:
+            with InCarVideoSensorFusionNode('incar_video_sensor_fusion_node') as incar_video_sensor_fusion_node:
+                executor = MultiThreadedExecutor()
+                executor.add_node(incar_video_edit_node)
+                executor.add_node(incar_video_sensor_fusion_node)
+                executor.spin()
+
         # Destroy the node explicitly
         # (optional - otherwise it will be done automatically
         # when the garbage collector destroys the node object)
         incar_video_edit_node.destroy_node()
+        incar_video_sensor_fusion_node.destroy_node()
     except KeyboardInterrupt:
         pass
     except:  # noqa: E722

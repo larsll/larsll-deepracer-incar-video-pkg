@@ -2,15 +2,17 @@ from enum import Enum, IntEnum
 import cv2
 
 # Topics / Services
-MAIN_CAMERA_TOPIC = "/camera_pkg/display_mjpeg"
-VIDEO_STATE_SRV = "/camera_pkg/media_state"
-IMU_TOPIC = "/imu_pkg/imu_raw"
-PUBLISH_SENSOR_TOPIC = "/sensor_fusion_pkg/sensor_msg"
+CAMERA_STATE_SRV = "/camera_pkg/media_state"
+SUBSCRIBE_IMU_TOPIC = "/imu/data"
+SUBSCRIBE_IMAGE_TOPIC = "/camera_pkg/display_mjpeg/compressed"
+SUBSCRIBE_SENSOR_TOPIC = "/sensor_fusion_pkg/sensor_msg"
+LED_STATE_SRV = "/servo_pkg/set_led_state"
+
 PUBLISH_VIDEO_TOPIC = "display_stream"
 PUBLISH_COMPRESSED_VIDEO_TOPIC = "display_stream/compressed"
-STATUS_TOPIC = "status"
-RECORDING_STATE_SERVICE_NAME = "recording_state"
-LED_SET_SERVICE_NAME = "/servo_pkg/set_led_state"
+PUBSUB_STATUS_TOPIC = "status"
+PUBSUB_SENSOR_TOPIC = "sensor_data"
+RECORDING_STATE_SRV = "recording_state"
 
 # Agent Video editor constants
 MAX_FRAMES_IN_QUEUE = 2700

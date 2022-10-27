@@ -16,7 +16,7 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from deepracer_interfaces_pkg.srv import SetLedCtrlSrv
 
 from incar_video_pkg.constants import (
-    LED_SET_SERVICE_NAME, MONITOR_CHECK_TIME, RECORDING_STATE_SERVICE_NAME, STATUS_TOPIC,
+    LED_STATE_SRV, MONITOR_CHECK_TIME, RECORDING_STATE_SRV, PUBSUB_STATUS_TOPIC,
     LedColorMap, RecordingState)
 
 from incar_video_interfaces_pkg.msg import StatusMsg
@@ -65,7 +65,7 @@ class InCarVideoAutoCtrlNode(Node):
         # Subscription to receive status update from edit node.
         self._main_cbg = ReentrantCallbackGroup()
         self._edit_node_sub = self.create_subscription(
-            StatusMsg, STATUS_TOPIC, self._receive_status_callback, 1,
+            StatusMsg, PUBSUB_STATUS_TOPIC, self._receive_status_callback, 1,
             callback_group=self._main_cbg)
 
         # Subscription to monitor topic.
@@ -75,11 +75,11 @@ class InCarVideoAutoCtrlNode(Node):
 
         # Service client to start and stop recording
         self._state_service_cli = self.create_client(
-            RecordStateSrv, RECORDING_STATE_SERVICE_NAME)
+            RecordStateSrv, RECORDING_STATE_SRV)
 
         # Service client to change LED state
         self._setledstate_service_cli = self.create_client(
-            SetLedCtrlSrv, LED_SET_SERVICE_NAME)
+            SetLedCtrlSrv, LED_STATE_SRV)
 
         # Check if timeout receiver thread
         self._timeout_check_thread = Thread(target=self._timeout_check_thread_cb)
